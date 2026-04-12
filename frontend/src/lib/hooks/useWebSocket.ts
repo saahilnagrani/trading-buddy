@@ -9,8 +9,9 @@ export function useOrderWebSocket(onUpdate?: (update: OrderUpdate) => void) {
   const [lastUpdate, setLastUpdate] = useState<OrderUpdate | null>(null);
 
   const connect = useCallback(() => {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const ws = new WebSocket(`${protocol}//${window.location.host}/ws/orders`);
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+    const wsUrl = apiUrl.replace(/^http/, "ws");
+    const ws = new WebSocket(`${wsUrl}/ws/orders`);
 
     ws.onopen = () => setConnected(true);
     ws.onclose = () => {

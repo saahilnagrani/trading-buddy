@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import axios from "axios";
 import { formatTime } from "@/lib/utils/formatters";
 
-const api = axios.create({ baseURL: "/api" });
+const api = axios.create({ baseURL: (process.env.NEXT_PUBLIC_API_URL || "") + "/api" });
 
 interface NotifItem {
   id: string;

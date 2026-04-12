@@ -17,7 +17,7 @@ import { calculatePayoff, type PayoffLeg } from "@/lib/utils/payoff";
 import { formatINR } from "@/lib/utils/formatters";
 import axios from "axios";
 
-const api = axios.create({ baseURL: "/api" });
+const api = axios.create({ baseURL: (process.env.NEXT_PUBLIC_API_URL || "") + "/api" });
 
 interface LegForm {
   leg_number: number;

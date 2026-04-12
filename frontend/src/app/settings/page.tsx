@@ -5,7 +5,7 @@ import { useAccounts, useUpdateAccount } from "@/lib/hooks/useAccounts";
 import type { Account } from "@/lib/types";
 import axios from "axios";
 
-const api = axios.create({ baseURL: "/api" });
+const api = axios.create({ baseURL: (process.env.NEXT_PUBLIC_API_URL || "") + "/api" });
 
 export default function SettingsPage() {
   const { data: accounts } = useAccounts();
