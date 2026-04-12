@@ -17,7 +17,8 @@ from app.schemas.order import (
     InstrumentSearchResult,
 )
 from app.services.order_engine import place_multi_account_order, cancel_order, modify_order
-from app.utils.instruments import search_instruments
+from app.utils.instruments import search_instruments, refresh_instruments
+from app.services.kite_service import get_kite_client
 
 router = APIRouter()
 
@@ -219,6 +220,38 @@ async def modify_order_endpoint(
 async def search_instruments_endpoint(
     q: str = Query(..., min_length=2),
     exchange: str | None = Query(None),
+    db: AsyncSession = Depends(get_db),
 ):
     results = await search_instruments(query=q, exchange=exchange)
+
+    # Auto-refresh cache if empty (first search of the day)
+    if not results:
+        # Find any logged-in account to use for fetching instruments
+        now = datetime.now(timezone.utc)
+        from app.models.account import AccountToken
+        from sqlalchemy.orm import selectinload
+        acct_result = await db.execute(
+            select(Account)
+            .options(selectinload(Account.tokens))
+            .where(Account.is_active.is_(True), Account.kite_api_key.isnot(None))
+        )
+        for account in acct_result.scalars().all():
+            valid_token = next(
+                (t for t in account.tokens if t.is_valid and t.expires_at > now), None
+            )
+            if valid_token:
+                try:
+                    kite = get_kite_client(
+                        account_id=account.id,
+                        api_key=account.kite_api_key,
+                        access_token_encrypted=valid_token.access_token,
+                    )
+                    await refresh_instruments(kite=kite)
+                    results = await search_instruments(query=q, exchange=exchange)
+                    break
+                except Exception as e:
+                    import logging
+                    logging.getLogger(__name__).error(f"Failed to refresh instruments via {account.name}: {e}")
+                    continue
+
     return [InstrumentSearchResult(**r) for r in results]
