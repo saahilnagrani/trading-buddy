@@ -97,8 +97,14 @@ async def update_account(account_id: uuid.UUID, data: AccountUpdate, db: AsyncSe
         raise HTTPException(status_code=404, detail="Account not found")
 
     update_data = data.model_dump(exclude_unset=True)
-    if "kite_api_secret" in update_data and update_data["kite_api_secret"]:
-        update_data["kite_api_secret"] = encrypt_token(update_data["kite_api_secret"])
+    # Don't overwrite credentials with empty strings
+    if "kite_api_key" in update_data and not update_data["kite_api_key"]:
+        del update_data["kite_api_key"]
+    if "kite_api_secret" in update_data:
+        if update_data["kite_api_secret"]:
+            update_data["kite_api_secret"] = encrypt_token(update_data["kite_api_secret"])
+        else:
+            del update_data["kite_api_secret"]
     for key, value in update_data.items():
         setattr(account, key, value)
 
