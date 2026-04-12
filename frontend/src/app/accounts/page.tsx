@@ -17,6 +17,7 @@ export default function AccountsPage() {
   const deleteMutation = useDeleteAccount();
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
+  const [showSecret, setShowSecret] = useState(false);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -53,6 +54,7 @@ export default function AccountsPage() {
         <button
           onClick={() => {
             setEditing(null);
+            setShowSecret(false);
             setShowForm(true);
           }}
           className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
@@ -119,12 +121,21 @@ export default function AccountsPage() {
               <label className="block text-sm text-[var(--muted)] mb-1">
                 Kite API Secret
               </label>
-              <input
-                name="kite_api_secret"
-                type="password"
-                className="w-full rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 text-sm font-mono"
-                placeholder={editing?.has_kite_credentials ? "••••••• (saved)" : "From kite.trade developer console"}
-              />
+              <div className="relative">
+                <input
+                  name="kite_api_secret"
+                  type={showSecret ? "text" : "password"}
+                  className="w-full rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 pr-16 text-sm font-mono"
+                  placeholder={editing?.has_kite_credentials ? "••••••• (saved)" : "From kite.trade developer console"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowSecret(!showSecret)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-[var(--muted)] hover:text-white"
+                >
+                  {showSecret ? "Hide" : "Show"}
+                </button>
+              </div>
             </div>
           </div>
           <div className="flex gap-2">
