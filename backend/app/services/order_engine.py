@@ -14,6 +14,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.database import async_session
 from app.models.account import Account, AccountToken
 from app.models.order import Order
 from app.services.kite_service import get_kite_client
@@ -60,81 +61,83 @@ async def _place_single_order(
     order_params: dict,
     quantity: int,
     group_id: uuid.UUID,
-    db: AsyncSession,
 ) -> dict:
-    """Place a single order on one account via Kite API."""
-    order_record = Order(
-        account_id=account_id,
-        group_id=group_id,
-        exchange=order_params["exchange"],
-        tradingsymbol=order_params["tradingsymbol"],
-        transaction_type=order_params["transaction_type"],
-        order_type=order_params["order_type"],
-        product=order_params["product"],
-        variety=order_params.get("variety", "regular"),
-        quantity=quantity,
-        price=order_params.get("price"),
-        trigger_price=order_params.get("trigger_price"),
-        status="PENDING",
-    )
-    db.add(order_record)
-    await db.flush()
+    """Place a single order on one account via Kite API.
 
-    try:
-        async with _api_semaphore:
-            # kiteconnect is synchronous, run in thread pool
-            kite_params = {
-                "variety": order_params.get("variety", "regular"),
-                "exchange": order_params["exchange"],
-                "tradingsymbol": order_params["tradingsymbol"],
-                "transaction_type": order_params["transaction_type"],
-                "order_type": order_params["order_type"],
-                "product": order_params["product"],
-                "quantity": quantity,
+    Uses its own DB session to avoid concurrency issues with asyncio.gather().
+    """
+    async with async_session() as db:
+        order_record = Order(
+            account_id=account_id,
+            group_id=group_id,
+            exchange=order_params["exchange"],
+            tradingsymbol=order_params["tradingsymbol"],
+            transaction_type=order_params["transaction_type"],
+            order_type=order_params["order_type"],
+            product=order_params["product"],
+            variety=order_params.get("variety", "regular"),
+            quantity=quantity,
+            price=order_params.get("price"),
+            trigger_price=order_params.get("trigger_price"),
+            status="PENDING",
+        )
+        db.add(order_record)
+        await db.flush()
+
+        try:
+            async with _api_semaphore:
+                kite_params = {
+                    "variety": order_params.get("variety", "regular"),
+                    "exchange": order_params["exchange"],
+                    "tradingsymbol": order_params["tradingsymbol"],
+                    "transaction_type": order_params["transaction_type"],
+                    "order_type": order_params["order_type"],
+                    "product": order_params["product"],
+                    "quantity": quantity,
+                }
+                if order_params.get("price"):
+                    kite_params["price"] = float(order_params["price"])
+                if order_params.get("trigger_price"):
+                    kite_params["trigger_price"] = float(order_params["trigger_price"])
+
+                loop = asyncio.get_event_loop()
+                kite_order_id = await loop.run_in_executor(
+                    None,
+                    lambda: kite.place_order(**kite_params),
+                )
+
+            order_record.kite_order_id = str(kite_order_id)
+            order_record.status = "PLACED"
+            order_record.placed_at = datetime.now(timezone.utc)
+            await db.commit()
+
+            logger.info(f"Order placed: {account_name} | {order_params['tradingsymbol']} | qty={quantity} | kite_id={kite_order_id}")
+
+            return {
+                "account_id": str(account_id),
+                "account_name": account_name,
+                "order_id": str(order_record.id),
+                "kite_order_id": str(kite_order_id),
+                "status": "PLACED",
+                "message": None,
             }
-            if order_params.get("price"):
-                kite_params["price"] = float(order_params["price"])
-            if order_params.get("trigger_price"):
-                kite_params["trigger_price"] = float(order_params["trigger_price"])
 
-            loop = asyncio.get_event_loop()
-            kite_order_id = await loop.run_in_executor(
-                None,
-                lambda: kite.place_order(**kite_params),
-            )
+        except Exception as e:
+            error_msg = str(e)
+            order_record.status = "REJECTED"
+            order_record.status_message = error_msg
+            await db.commit()
 
-        order_record.kite_order_id = str(kite_order_id)
-        order_record.status = "PLACED"
-        order_record.placed_at = datetime.now(timezone.utc)
-        await db.flush()
+            logger.error(f"Order failed: {account_name} | {order_params['tradingsymbol']} | {error_msg}")
 
-        logger.info(f"Order placed: {account_name} | {order_params['tradingsymbol']} | qty={quantity} | kite_id={kite_order_id}")
-
-        return {
-            "account_id": str(account_id),
-            "account_name": account_name,
-            "order_id": str(order_record.id),
-            "kite_order_id": str(kite_order_id),
-            "status": "PLACED",
-            "message": None,
-        }
-
-    except Exception as e:
-        error_msg = str(e)
-        order_record.status = "REJECTED"
-        order_record.status_message = error_msg
-        await db.flush()
-
-        logger.error(f"Order failed: {account_name} | {order_params['tradingsymbol']} | {error_msg}")
-
-        return {
-            "account_id": str(account_id),
-            "account_name": account_name,
-            "order_id": str(order_record.id),
-            "kite_order_id": None,
-            "status": "ERROR",
-            "message": error_msg,
-        }
+            return {
+                "account_id": str(account_id),
+                "account_name": account_name,
+                "order_id": str(order_record.id),
+                "kite_order_id": None,
+                "status": "ERROR",
+                "message": error_msg,
+            }
 
 
 async def place_multi_account_order(
@@ -222,7 +225,7 @@ async def place_multi_account_order(
 
         quantities[aid] = qty
 
-    # Place orders concurrently
+    # Place orders concurrently (each gets its own DB session)
     tasks = []
     for aid, qty in quantities.items():
         info = clients[aid]
@@ -234,15 +237,12 @@ async def place_multi_account_order(
                 order_params=order_params,
                 quantity=qty,
                 group_id=group_id,
-                db=db,
             )
         )
 
     if tasks:
         order_results = await asyncio.gather(*tasks)
         results.extend(order_results)
-
-    await db.commit()
 
     placed = sum(1 for r in results if r["status"] == "PLACED")
     failed = len(results) - placed
