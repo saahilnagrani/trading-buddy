@@ -76,9 +76,12 @@ async def sync_order_statuses():
             )
             if not valid_token:
                 continue
+            if not account.kite_api_key:
+                logger.warning(f"Skipping {account.name}: no kite_api_key configured")
+                continue
 
             try:
-                kite = get_kite_client(account_id=account.id, access_token_encrypted=valid_token.access_token)
+                kite = get_kite_client(account_id=account.id, api_key=account.kite_api_key, access_token_encrypted=valid_token.access_token)
 
                 loop = asyncio.get_event_loop()
                 kite_orders = await loop.run_in_executor(None, kite.orders)

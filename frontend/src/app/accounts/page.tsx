@@ -24,6 +24,8 @@ export default function AccountsPage() {
     const payload: AccountCreate = {
       name: form.get("name") as string,
       owner_name: (form.get("owner_name") as string) || undefined,
+      kite_api_key: (form.get("kite_api_key") as string) || undefined,
+      kite_api_secret: (form.get("kite_api_secret") as string) || undefined,
       max_lots: parseInt(form.get("max_lots") as string) || 1,
     };
 
@@ -102,6 +104,29 @@ export default function AccountsPage() {
               />
             </div>
           </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <label className="block text-sm text-[var(--muted)] mb-1">
+                Kite API Key
+              </label>
+              <input
+                name="kite_api_key"
+                className="w-full rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 text-sm font-mono"
+                placeholder={editing?.has_kite_credentials ? "••••••• (saved)" : "From kite.trade developer console"}
+              />
+            </div>
+            <div>
+              <label className="block text-sm text-[var(--muted)] mb-1">
+                Kite API Secret
+              </label>
+              <input
+                name="kite_api_secret"
+                type="password"
+                className="w-full rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 text-sm font-mono"
+                placeholder={editing?.has_kite_credentials ? "••••••• (saved)" : "From kite.trade developer console"}
+              />
+            </div>
+          </div>
           <div className="flex gap-2">
             <button
               type="submit"
@@ -143,6 +168,7 @@ export default function AccountsPage() {
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Owner</th>
                 <th className="px-4 py-3 font-medium">Max Lots</th>
+                <th className="px-4 py-3 font-medium">Kite API</th>
                 <th className="px-4 py-3 font-medium">Status</th>
                 <th className="px-4 py-3 font-medium">Actions</th>
               </tr>
@@ -155,6 +181,11 @@ export default function AccountsPage() {
                     {account.owner_name || "-"}
                   </td>
                   <td className="px-4 py-3">{account.max_lots}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs ${account.has_kite_credentials ? "text-green-400" : "text-red-400"}`}>
+                      {account.has_kite_credentials ? "Configured" : "Missing"}
+                    </span>
+                  </td>
                   <td className="px-4 py-3">
                     <AccountStatusBadge
                       isLoggedIn={account.token_status.is_logged_in}

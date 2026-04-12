@@ -17,6 +17,8 @@ class Account(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     owner_name: Mapped[str | None] = mapped_column(String(100))
+    kite_api_key: Mapped[str | None] = mapped_column(String(100))
+    kite_api_secret: Mapped[str | None] = mapped_column(String(512))  # Encrypted
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     max_lots: Mapped[int] = mapped_column(Integer, default=1)
     max_order_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))

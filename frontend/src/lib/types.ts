@@ -10,6 +10,7 @@ export interface Account {
   id: string;
   name: string;
   owner_name: string | null;
+  has_kite_credentials: boolean;
   is_active: boolean;
   max_lots: number;
   token_status: TokenStatus;
@@ -20,12 +21,16 @@ export interface Account {
 export interface AccountCreate {
   name: string;
   owner_name?: string;
+  kite_api_key?: string;
+  kite_api_secret?: string;
   max_lots: number;
 }
 
 export interface AccountUpdate {
   name?: string;
   owner_name?: string;
+  kite_api_key?: string;
+  kite_api_secret?: string;
   is_active?: boolean;
   max_lots?: number;
 }

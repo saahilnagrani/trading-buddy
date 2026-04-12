@@ -15,6 +15,7 @@ from app.schemas.account import (
     AccountUpdate,
     TokenStatus,
 )
+from app.services.token_manager import encrypt_token
 
 router = APIRouter()
 
@@ -39,6 +40,7 @@ def _account_to_response(account: Account) -> AccountResponse:
         id=account.id,
         name=account.name,
         owner_name=account.owner_name,
+        has_kite_credentials=bool(account.kite_api_key and account.kite_api_secret),
         is_active=account.is_active,
         max_lots=account.max_lots,
         token_status=_build_token_status(account),
@@ -75,6 +77,8 @@ async def create_account(data: AccountCreate, db: AsyncSession = Depends(get_db)
     account = Account(
         name=data.name,
         owner_name=data.owner_name,
+        kite_api_key=data.kite_api_key,
+        kite_api_secret=encrypt_token(data.kite_api_secret) if data.kite_api_secret else None,
         max_lots=data.max_lots,
     )
     db.add(account)
@@ -93,6 +97,8 @@ async def update_account(account_id: uuid.UUID, data: AccountUpdate, db: AsyncSe
         raise HTTPException(status_code=404, detail="Account not found")
 
     update_data = data.model_dump(exclude_unset=True)
+    if "kite_api_secret" in update_data and update_data["kite_api_secret"]:
+        update_data["kite_api_secret"] = encrypt_token(update_data["kite_api_secret"])
     for key, value in update_data.items():
         setattr(account, key, value)
 

@@ -7,12 +7,16 @@ from pydantic import BaseModel, Field
 class AccountCreate(BaseModel):
     name: str = Field(..., max_length=100)
     owner_name: str | None = Field(None, max_length=100)
+    kite_api_key: str | None = Field(None, max_length=100)
+    kite_api_secret: str | None = Field(None, max_length=200)
     max_lots: int = Field(1, ge=1)
 
 
 class AccountUpdate(BaseModel):
     name: str | None = Field(None, max_length=100)
     owner_name: str | None = Field(None, max_length=100)
+    kite_api_key: str | None = Field(None, max_length=100)
+    kite_api_secret: str | None = Field(None, max_length=200)
     is_active: bool | None = None
     max_lots: int | None = Field(None, ge=1)
     max_order_value: float | None = None
@@ -32,6 +36,7 @@ class AccountResponse(BaseModel):
     id: uuid.UUID
     name: str
     owner_name: str | None
+    has_kite_credentials: bool = False
     is_active: bool
     max_lots: int
     max_order_value: float | None = None

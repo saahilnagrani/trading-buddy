@@ -79,8 +79,11 @@ async def get_portfolio_summary(db: AsyncSession) -> dict:
         )
         if not valid_token:
             continue
+        if not account.kite_api_key:
+            logger.warning(f"Skipping {account.name}: no kite_api_key configured")
+            continue
         try:
-            kite = get_kite_client(account_id=account.id, access_token_encrypted=valid_token.access_token)
+            kite = get_kite_client(account_id=account.id, api_key=account.kite_api_key, access_token_encrypted=valid_token.access_token)
             tasks.append(_fetch_account_data(account, kite))
         except Exception:
             continue

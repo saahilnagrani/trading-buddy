@@ -43,8 +43,10 @@ async def _load_kite_clients(account_ids: list[uuid.UUID], db: AsyncSession) -> 
         )
         if not valid_token:
             continue
+        if not account.kite_api_key:
+            continue
         try:
-            kite = get_kite_client(account_id=account.id, access_token_encrypted=valid_token.access_token)
+            kite = get_kite_client(account_id=account.id, api_key=account.kite_api_key, access_token_encrypted=valid_token.access_token)
             clients[account.id] = {"client": kite, "account": account}
         except Exception as e:
             logger.error(f"Failed to load Kite client for {account.name}: {e}")

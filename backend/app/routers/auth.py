@@ -15,7 +15,7 @@ from app.models.account import Account, AccountToken
 from app.redis import get_redis
 from app.schemas.account import AuthStatusResponse, LoginUrlResponse
 from app.services.kite_service import get_kite_client
-from app.services.token_manager import encrypt_token
+from app.services.token_manager import encrypt_token, decrypt_token
 
 router = APIRouter()
 
@@ -37,13 +37,15 @@ async def get_login_url(account_id: uuid.UUID, db: AsyncSession = Depends(get_db
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
 
+    if not account.kite_api_key or not account.kite_api_secret:
+        raise HTTPException(status_code=400, detail="Account missing Kite API credentials. Add them in Accounts settings.")
+
     # Store pending login account_id in Redis (10 min TTL)
-    # Kite doesn't forward custom state params, so we track the most recent login request
     r = get_redis()
     await r.set("oauth_pending_account", str(account_id), ex=600)
     await r.aclose()
 
-    kite = get_kite_client()
+    kite = get_kite_client(account_id=account_id, api_key=account.kite_api_key)
     login_url = kite.login_url()
 
     return LoginUrlResponse(login_url=login_url, account_id=account_id)
@@ -69,16 +71,20 @@ async def oauth_callback(
 
     account_id = uuid.UUID(account_id_str)
 
-    # Verify account exists
+    # Verify account exists and has credentials
     result = await db.execute(select(Account).where(Account.id == account_id))
     account = result.scalar_one_or_none()
     if not account:
         return RedirectResponse(url=f"{settings.frontend_url}/login?error=account_not_found")
 
-    # Exchange request token for access token
+    if not account.kite_api_key or not account.kite_api_secret:
+        return RedirectResponse(url=f"{settings.frontend_url}/login?error=missing_credentials")
+
+    # Exchange request token for access token using per-account credentials
     try:
-        kite = get_kite_client()
-        session_data = kite.generate_session(request_token, api_secret=settings.kite_api_secret)
+        kite = get_kite_client(account_id=account_id, api_key=account.kite_api_key)
+        api_secret = decrypt_token(account.kite_api_secret)
+        session_data = kite.generate_session(request_token, api_secret=api_secret)
         access_token = session_data["access_token"]
     except Exception as e:
         return RedirectResponse(url=f"{settings.frontend_url}/login?error=token_exchange_failed")
@@ -108,7 +114,7 @@ async def oauth_callback(
     await db.commit()
 
     # Initialize KiteConnect instance for this account
-    get_kite_client(account_id=account_id, access_token_encrypted=token.access_token)
+    get_kite_client(account_id=account_id, api_key=account.kite_api_key, access_token_encrypted=token.access_token)
 
     return RedirectResponse(url=f"{settings.frontend_url}/login?success={account_id}")
 
