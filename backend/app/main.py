@@ -21,9 +21,13 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Trading Buddy", version="0.1.0", lifespan=lifespan)
 
+origins = [settings.frontend_url.rstrip("/")]
+if settings.frontend_url != "http://localhost:3000":
+    origins.append("http://localhost:3000")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.frontend_url],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

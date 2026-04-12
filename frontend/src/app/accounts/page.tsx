@@ -105,9 +105,14 @@ export default function AccountsPage() {
           <div className="flex gap-2">
             <button
               type="submit"
-              className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+              disabled={createMutation.isPending || updateMutation.isPending}
+              className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {editing ? "Update" : "Create"}
+              {createMutation.isPending || updateMutation.isPending
+                ? "Saving..."
+                : editing
+                  ? "Update"
+                  : "Create"}
             </button>
             <button
               type="button"
