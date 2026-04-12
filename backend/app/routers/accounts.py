@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timezone
 
@@ -5,6 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+
+logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.models.account import Account, AccountToken
@@ -96,21 +99,25 @@ async def update_account(account_id: uuid.UUID, data: AccountUpdate, db: AsyncSe
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    update_data = data.model_dump(exclude_unset=True)
-    # Don't overwrite credentials with empty strings
-    if "kite_api_key" in update_data and not update_data["kite_api_key"]:
-        del update_data["kite_api_key"]
-    if "kite_api_secret" in update_data:
-        if update_data["kite_api_secret"]:
-            update_data["kite_api_secret"] = encrypt_token(update_data["kite_api_secret"])
-        else:
-            del update_data["kite_api_secret"]
-    for key, value in update_data.items():
-        setattr(account, key, value)
+    try:
+        update_data = data.model_dump(exclude_unset=True)
+        # Don't overwrite credentials with empty strings
+        if "kite_api_key" in update_data and not update_data["kite_api_key"]:
+            del update_data["kite_api_key"]
+        if "kite_api_secret" in update_data:
+            if update_data["kite_api_secret"]:
+                update_data["kite_api_secret"] = encrypt_token(update_data["kite_api_secret"])
+            else:
+                del update_data["kite_api_secret"]
+        for key, value in update_data.items():
+            setattr(account, key, value)
 
-    await db.commit()
-    await db.refresh(account, attribute_names=["tokens"])
-    return _account_to_response(account)
+        await db.commit()
+        await db.refresh(account, attribute_names=["tokens"])
+        return _account_to_response(account)
+    except Exception as e:
+        logger.error(f"Failed to update account {account_id}: {e}", exc_info=True)
+        raise
 
 
 @router.delete("/{account_id}", status_code=204)
