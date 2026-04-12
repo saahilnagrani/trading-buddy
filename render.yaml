@@ -1,0 +1,55 @@
+# Render Blueprint: https://render.com/docs/blueprint-spec
+# Deploy via: Dashboard > New > Blueprint > connect this repo
+#
+# External services (set up separately):
+#   Postgres: Neon (https://neon.tech) — copy connection string to DATABASE_URL
+#   Redis: Upstash (https://upstash.com) — copy Redis URL to REDIS_URL
+
+services:
+  # Backend API
+  - type: web
+    name: trading-buddy-api
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    plan: starter  # $7/mo, always-on (needed for schedulers + WebSocket)
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATABASE_URL
+        sync: false  # Neon connection string (postgresql://...)
+      - key: REDIS_URL
+        sync: false  # Upstash Redis URL (rediss://...)
+      - key: KITE_API_KEY
+        sync: false
+      - key: KITE_API_SECRET
+        sync: false
+      - key: KITE_REDIRECT_URL
+        sync: false  # https://trading-buddy-api.onrender.com/api/auth/callback
+      - key: SECRET_KEY
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_EMAIL
+        value: mailto:admin@tradingbuddy.app
+      - key: FRONTEND_URL
+        sync: false  # https://trading-buddy-web.onrender.com
+      - key: BACKEND_URL
+        sync: false  # https://trading-buddy-api.onrender.com
+
+  # Frontend (Next.js)
+  - type: web
+    name: trading-buddy-web
+    runtime: node
+    plan: starter  # $7/mo
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NEXT_PUBLIC_API_URL
+        sync: false  # https://trading-buddy-api.onrender.com
+      - key: NEXT_PUBLIC_VAPID_PUBLIC_KEY
+        sync: false
+      - key: NODE_ENV
+        value: production

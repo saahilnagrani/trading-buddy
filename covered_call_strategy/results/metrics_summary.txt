@@ -1,0 +1,25 @@
+COVERED CALL STRATEGY - BACKTEST METRICS
+==================================================
+
+initial_capital: 500000
+final_capital: 635893.75
+total_pnl: 135893.75
+total_return_pct: 27.18
+cagr_pct: 5.08
+num_trades: 59
+winners: 42
+losers: 17
+win_rate_pct: 71.19
+avg_win: 6590.29
+avg_loss: -8288.15
+max_win: 12358.7
+max_loss: -22206.76
+profit_factor: 1.96
+sharpe_ratio: 1.0
+max_drawdown_pct: -5.3
+exit_reasons:
+  profit_target: 14
+  roll_itm: 38
+  stop_loss_underlying: 7
+avg_premium_collected: 332.32
+total_charges: 3645.61
