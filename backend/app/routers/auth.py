@@ -1,5 +1,8 @@
+import logging
 import uuid
 from datetime import datetime, timedelta, timezone, time
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
@@ -87,6 +90,7 @@ async def oauth_callback(
         session_data = kite.generate_session(request_token, api_secret=api_secret)
         access_token = session_data["access_token"]
     except Exception as e:
+        logger.error(f"Token exchange failed for account {account.name} ({account_id}): {e}")
         return RedirectResponse(url=f"{settings.frontend_url}/login?error=token_exchange_failed")
 
     # Store encrypted token
