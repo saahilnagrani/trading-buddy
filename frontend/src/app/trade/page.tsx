@@ -15,53 +15,50 @@ import type {
 type Step = "instrument" | "accounts" | "quantity" | "review";
 
 function formatInstrumentDisplay(r: InstrumentResult) {
-  // Parse tradingsymbol to extract underlying, expiry, strike, option type
-  // e.g., "NIFTY2541725000CE" -> { name: "NIFTY", date: "17 APR", strike: "25000", optType: "CE" }
   const ts = r.tradingsymbol;
-  const name = r.name || ts;
+  const name = r.name || "";
 
   if (!r.expiry) {
-    // Equity instrument
-    return { display: name || ts, sub: ts !== name ? ts : "", tag: null };
+    return { display: name || ts, sub: name && name !== ts ? ts : "", tag: null };
   }
 
-  // Parse expiry date
   const expDate = new Date(r.expiry);
   const day = expDate.getUTCDate();
   const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
   const month = months[expDate.getUTCMonth()];
 
-  // Determine if weekly or monthly
-  // Monthly expiry is typically last Thursday of the month
   const lastDay = new Date(expDate.getUTCFullYear(), expDate.getUTCMonth() + 1, 0).getUTCDate();
   const isMonthly = day > lastDay - 7;
   const tag = isMonthly ? "MONTHLY" : "WEEKLY";
+  const tagShort = isMonthly ? "" : " w";
 
-  // Extract option type from instrument_type
   const isOption = r.instrument_type?.includes("OPT");
   const isFuture = r.instrument_type?.includes("FUT");
 
-  // Build display string
-  let underlying = name;
-  let suffix = "";
-  if (isOption && r.strike) {
-    suffix = `${r.strike} ${ts.endsWith("CE") ? "CE" : ts.endsWith("PE") ? "PE" : ""}`;
-  } else if (isFuture) {
-    suffix = "FUT";
-  }
-
-  // Add ordinal suffix to day
   const ordinal = (n: number) => {
     const s = ["th", "st", "nd", "rd"];
     const v = n % 100;
     return n + (s[(v - 20) % 10] || s[v] || s[0]);
   };
 
-  const dateStr = `${ordinal(day)} ${month}`;
-  const display = suffix ? `${underlying} ${suffix}` : underlying || ts;
-  const sub = r.expiry ? `${day} ${month} ${tag}` : "";
+  const underlying = name || ts.replace(/\d.*/,"");
 
-  return { display, sub, tag, dateStr };
+  if (isOption && r.strike) {
+    const optType = ts.endsWith("CE") ? "CE" : ts.endsWith("PE") ? "PE" : "";
+    const display = `${underlying} ${ordinal(day)}${tagShort} ${month} ${r.strike} ${optType}`;
+    const sub = `${day} ${month} ${tag}`;
+    return { display, sub, tag };
+  }
+
+  if (isFuture) {
+    const display = `${underlying} ${ordinal(day)}${tagShort} ${month} FUT`;
+    const sub = `${day} ${month} ${tag}`;
+    return { display, sub, tag };
+  }
+
+  const display = underlying || ts;
+  const sub = `${day} ${month} ${tag}`;
+  return { display, sub, tag };
 }
 
 export default function TradePage() {
@@ -84,24 +81,35 @@ export default function TradePage() {
   const [customAllocs, setCustomAllocs] = useState<Record<string, string>>({});
   const [orderResult, setOrderResult] = useState<PlaceOrderResponse | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
+  const abortRef = useRef<AbortController>();
 
-  // Debounced instrument search
+  // Debounced instrument search with abort for stale requests
   useEffect(() => {
     if (searchQuery.length < 2) {
       setSearchResults([]);
       return;
     }
     clearTimeout(debounceRef.current);
+    abortRef.current?.abort();
+
     debounceRef.current = setTimeout(async () => {
+      const controller = new AbortController();
+      abortRef.current = controller;
       setSearching(true);
       try {
         const results = await searchInstruments(searchQuery);
-        setSearchResults(results);
+        if (!controller.signal.aborted) {
+          setSearchResults(results);
+        }
       } catch {
-        setSearchResults([]);
+        if (!controller.signal.aborted) {
+          setSearchResults([]);
+        }
       }
-      setSearching(false);
-    }, 300);
+      if (!controller.signal.aborted) {
+        setSearching(false);
+      }
+    }, 500);
   }, [searchQuery]);
 
   const loggedInAccounts = accounts?.filter(
@@ -182,7 +190,7 @@ export default function TradePage() {
 
       {/* Step 1: Instrument Search */}
       {step === "instrument" && (
-        <div className="space-y-4">
+        <div className="space-y-4 max-w-xl">
           <div>
             <label className="block text-sm text-[var(--muted)] mb-1">
               Search Instrument
