@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { useAuthStatus } from "@/lib/hooks/useAccounts";
 import { getLoginUrl } from "@/lib/api";
@@ -8,6 +8,14 @@ import { AccountStatusBadge } from "@/components/accounts/AccountStatusBadge";
 import { formatTime } from "@/lib/utils/formatters";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<p className="text-[var(--muted)]">Loading...</p>}>
+      <LoginContent />
+    </Suspense>
+  );
+}
+
+function LoginContent() {
   const { data: statuses, isLoading, refetch } = useAuthStatus();
   const searchParams = useSearchParams();
 
