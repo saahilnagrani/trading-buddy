@@ -18,6 +18,7 @@ export default function AccountsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
   const [showSecret, setShowSecret] = useState(false);
+  const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -30,6 +31,7 @@ export default function AccountsPage() {
       max_lots: parseInt(form.get("max_lots") as string) || 1,
     };
 
+    setFeedback(null);
     if (editing) {
       updateMutation.mutate(
         { id: editing.id, data: payload },
@@ -37,12 +39,22 @@ export default function AccountsPage() {
           onSuccess: () => {
             setEditing(null);
             setShowForm(false);
+            setFeedback({ type: "success", message: "Account updated successfully" });
+          },
+          onError: (err: any) => {
+            setFeedback({ type: "error", message: err?.response?.data?.detail || err?.message || "Failed to update account" });
           },
         }
       );
     } else {
       createMutation.mutate(payload, {
-        onSuccess: () => setShowForm(false),
+        onSuccess: () => {
+          setShowForm(false);
+          setFeedback({ type: "success", message: "Account created successfully" });
+        },
+        onError: (err: any) => {
+          setFeedback({ type: "error", message: err?.response?.data?.detail || err?.message || "Failed to create account" });
+        },
       });
     }
   }
@@ -62,6 +74,18 @@ export default function AccountsPage() {
           Add Account
         </button>
       </div>
+
+      {feedback && (
+        <div
+          className={`rounded-lg border px-4 py-3 text-sm ${
+            feedback.type === "success"
+              ? "border-green-500/30 bg-green-500/10 text-green-400"
+              : "border-red-500/30 bg-red-500/10 text-red-400"
+          }`}
+        >
+          {feedback.message}
+        </div>
+      )}
 
       {/* Add/Edit Form */}
       {showForm && (
