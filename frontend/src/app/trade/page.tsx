@@ -14,6 +14,56 @@ import type {
 
 type Step = "instrument" | "accounts" | "quantity" | "review";
 
+function formatInstrumentDisplay(r: InstrumentResult) {
+  // Parse tradingsymbol to extract underlying, expiry, strike, option type
+  // e.g., "NIFTY2541725000CE" -> { name: "NIFTY", date: "17 APR", strike: "25000", optType: "CE" }
+  const ts = r.tradingsymbol;
+  const name = r.name || ts;
+
+  if (!r.expiry) {
+    // Equity instrument
+    return { display: name || ts, sub: ts !== name ? ts : "", tag: null };
+  }
+
+  // Parse expiry date
+  const expDate = new Date(r.expiry);
+  const day = expDate.getUTCDate();
+  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+  const month = months[expDate.getUTCMonth()];
+
+  // Determine if weekly or monthly
+  // Monthly expiry is typically last Thursday of the month
+  const lastDay = new Date(expDate.getUTCFullYear(), expDate.getUTCMonth() + 1, 0).getUTCDate();
+  const isMonthly = day > lastDay - 7;
+  const tag = isMonthly ? "MONTHLY" : "WEEKLY";
+
+  // Extract option type from instrument_type
+  const isOption = r.instrument_type?.includes("OPT");
+  const isFuture = r.instrument_type?.includes("FUT");
+
+  // Build display string
+  let underlying = name;
+  let suffix = "";
+  if (isOption && r.strike) {
+    suffix = `${r.strike} ${ts.endsWith("CE") ? "CE" : ts.endsWith("PE") ? "PE" : ""}`;
+  } else if (isFuture) {
+    suffix = "FUT";
+  }
+
+  // Add ordinal suffix to day
+  const ordinal = (n: number) => {
+    const s = ["th", "st", "nd", "rd"];
+    const v = n % 100;
+    return n + (s[(v - 20) % 10] || s[v] || s[0]);
+  };
+
+  const dateStr = `${ordinal(day)} ${month}`;
+  const display = suffix ? `${underlying} ${suffix}` : underlying || ts;
+  const sub = r.expiry ? `${day} ${month} ${tag}` : "";
+
+  return { display, sub, tag, dateStr };
+}
+
 export default function TradePage() {
   const { data: accounts } = useAccounts();
   const placeOrdersMut = usePlaceOrders();
@@ -150,28 +200,36 @@ export default function TradePage() {
           )}
 
           {searchResults.length > 0 && (
-            <div className="max-h-80 overflow-y-auto rounded-lg border border-[var(--card-border)]">
-              {searchResults.map((r) => (
-                <button
-                  key={`${r.exchange}:${r.tradingsymbol}`}
-                  onClick={() => {
-                    setInstrument(r);
-                    setSearchResults([]);
-                    setSearchQuery(r.tradingsymbol);
-                    setStep("accounts");
-                  }}
-                  className="w-full text-left px-4 py-2.5 hover:bg-white/5 border-b border-[var(--card-border)] last:border-0 text-sm"
-                >
-                  <span className="font-medium">{r.tradingsymbol}</span>
-                  <span className="ml-2 text-[var(--muted)]">
-                    {r.exchange} {r.instrument_type && `| ${r.instrument_type}`}{" "}
-                    {r.expiry && `| ${r.expiry}`}
-                  </span>
-                  <span className="ml-2 text-xs text-[var(--muted)]">
-                    Lot: {r.lot_size}
-                  </span>
-                </button>
-              ))}
+            <div className="max-h-96 overflow-y-auto rounded-lg border border-[var(--card-border)] bg-[var(--card)]">
+              {searchResults.map((r) => {
+                const fmt = formatInstrumentDisplay(r);
+                return (
+                  <button
+                    key={`${r.exchange}:${r.tradingsymbol}`}
+                    onClick={() => {
+                      setInstrument(r);
+                      setSearchResults([]);
+                      setSearchQuery(r.tradingsymbol);
+                      setStep("accounts");
+                    }}
+                    className="w-full text-left px-4 py-3 hover:bg-white/5 border-b border-[var(--card-border)] last:border-0 flex items-center justify-between gap-3"
+                  >
+                    <span className="text-sm font-medium truncate">
+                      {fmt.display}
+                    </span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {fmt.sub && (
+                        <span className="text-xs text-[var(--muted)]">
+                          {fmt.sub}
+                        </span>
+                      )}
+                      <span className="rounded bg-white/10 px-1.5 py-0.5 text-[11px] font-medium text-[var(--muted)]">
+                        {r.exchange}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
             </div>
           )}
 
