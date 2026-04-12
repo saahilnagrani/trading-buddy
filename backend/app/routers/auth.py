@@ -37,16 +37,14 @@ async def get_login_url(account_id: uuid.UUID, db: AsyncSession = Depends(get_db
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    # Store state -> account_id mapping in Redis (10 min TTL)
-    state = str(uuid.uuid4())
+    # Store pending login account_id in Redis (10 min TTL)
+    # Kite doesn't forward custom state params, so we track the most recent login request
     r = get_redis()
-    await r.set(f"oauth_state:{state}", str(account_id), ex=600)
+    await r.set("oauth_pending_account", str(account_id), ex=600)
     await r.aclose()
 
     kite = get_kite_client()
     login_url = kite.login_url()
-    # Append state param to the login URL
-    login_url = f"{login_url}&state={state}"
 
     return LoginUrlResponse(login_url=login_url, account_id=account_id)
 
@@ -55,23 +53,19 @@ async def get_login_url(account_id: uuid.UUID, db: AsyncSession = Depends(get_db
 async def oauth_callback(
     request_token: str = Query(...),
     status: str = Query(""),
-    state: str = Query(""),
     db: AsyncSession = Depends(get_db),
 ):
     if status != "success":
         return RedirectResponse(url=f"{settings.frontend_url}/login?error=auth_failed")
 
-    if not state:
-        return RedirectResponse(url=f"{settings.frontend_url}/login?error=missing_state")
-
-    # Look up account_id from state
+    # Look up the pending account from the most recent login request
     r = get_redis()
-    account_id_str = await r.get(f"oauth_state:{state}")
-    await r.delete(f"oauth_state:{state}")
+    account_id_str = await r.get("oauth_pending_account")
+    await r.delete("oauth_pending_account")
     await r.aclose()
 
     if not account_id_str:
-        return RedirectResponse(url=f"{settings.frontend_url}/login?error=invalid_state")
+        return RedirectResponse(url=f"{settings.frontend_url}/login?error=no_pending_login")
 
     account_id = uuid.UUID(account_id_str)
 
