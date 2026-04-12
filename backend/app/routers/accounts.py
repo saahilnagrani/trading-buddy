@@ -86,7 +86,11 @@ async def create_account(data: AccountCreate, db: AsyncSession = Depends(get_db)
     )
     db.add(account)
     await db.commit()
-    await db.refresh(account, attribute_names=["tokens"])
+    # Re-fetch with eager-loaded tokens to avoid lazy load in async context
+    result = await db.execute(
+        select(Account).options(selectinload(Account.tokens)).where(Account.id == account.id)
+    )
+    account = result.scalar_one()
     return _account_to_response(account)
 
 
@@ -113,7 +117,11 @@ async def update_account(account_id: uuid.UUID, data: AccountUpdate, db: AsyncSe
             setattr(account, key, value)
 
         await db.commit()
-        await db.refresh(account, attribute_names=["tokens"])
+        # Re-fetch with eager-loaded tokens to avoid lazy load in async context
+        result = await db.execute(
+            select(Account).options(selectinload(Account.tokens)).where(Account.id == account_id)
+        )
+        account = result.scalar_one()
         return _account_to_response(account)
     except Exception as e:
         logger.error(f"Failed to update account {account_id}: {e}", exc_info=True)
