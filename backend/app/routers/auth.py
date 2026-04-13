@@ -106,7 +106,7 @@ async def oauth_callback(
         expires_at=_next_expiry(),
     )
 
-    # Invalidate any existing token for today
+    # Delete any existing token for today (unique constraint on account_id + token_date)
     existing = await db.execute(
         select(AccountToken).where(
             AccountToken.account_id == account_id,
@@ -114,7 +114,8 @@ async def oauth_callback(
         )
     )
     for old_token in existing.scalars().all():
-        old_token.is_valid = False
+        await db.delete(old_token)
+    await db.flush()
 
     db.add(token)
     await db.commit()
