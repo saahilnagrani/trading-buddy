@@ -4,10 +4,11 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils/formatters";
 import { NotificationBell } from "@/components/layout/NotificationBell";
+import { useAuth } from "@/lib/contexts/AuthContext";
+import { logoutUser } from "@/lib/api";
 
 const NAV_ITEMS = [
   { href: "/", label: "Dashboard" },
-  { href: "/login", label: "Login" },
   { href: "/accounts", label: "Accounts" },
   { href: "/trade", label: "Trade" },
   { href: "/orders", label: "Orders" },
@@ -19,6 +20,7 @@ const NAV_ITEMS = [
 
 export function Navbar() {
   const pathname = usePathname();
+  const { user } = useAuth();
 
   return (
     <nav className="border-b border-[var(--card-border)] bg-[var(--card)]">
@@ -44,6 +46,17 @@ export function Navbar() {
             ))}
           </div>
           <NotificationBell />
+          {user && (
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-[var(--muted)]">{user.username}</span>
+              <button
+                onClick={logoutUser}
+                className="text-xs text-[var(--muted)] hover:text-white transition-colors"
+              >
+                Logout
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </nav>

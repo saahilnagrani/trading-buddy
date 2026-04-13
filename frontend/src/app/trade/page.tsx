@@ -3,13 +3,14 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useAccounts } from "@/lib/hooks/useAccounts";
 import { usePlaceOrders } from "@/lib/hooks/useOrders";
-import { searchInstruments } from "@/lib/api";
+import { searchInstruments, fetchQuote } from "@/lib/api";
 import { AccountStatusBadge } from "@/components/accounts/AccountStatusBadge";
 import type {
   InstrumentResult,
   PlaceOrderRequest,
   PlaceOrderResponse,
   Account,
+  QuoteData,
 } from "@/lib/types";
 
 type Step = "instrument" | "accounts" | "quantity" | "review";
@@ -32,8 +33,9 @@ function formatInstrumentDisplay(r: InstrumentResult) {
   const tag = isMonthly ? "MONTHLY" : "WEEKLY";
   const tagShort = isMonthly ? "" : " w";
 
-  const isOption = r.instrument_type?.includes("OPT");
-  const isFuture = r.instrument_type?.includes("FUT");
+  const it = r.instrument_type?.toUpperCase() || "";
+  const isOption = it.includes("OPT") || it === "CE" || it === "PE";
+  const isFuture = it.includes("FUT");
 
   const ordinal = (n: number) => {
     const s = ["th", "st", "nd", "rd"];
@@ -44,7 +46,7 @@ function formatInstrumentDisplay(r: InstrumentResult) {
   const underlying = name || ts.replace(/\d.*/,"");
 
   if (isOption && r.strike) {
-    const optType = ts.endsWith("CE") ? "CE" : ts.endsWith("PE") ? "PE" : "";
+    const optType = it === "CE" || ts.endsWith("CE") ? "CE" : it === "PE" || ts.endsWith("PE") ? "PE" : "";
     const display = `${underlying} ${ordinal(day)}${tagShort} ${month} ${r.strike} ${optType}`;
     const sub = `${day} ${month} ${tag}`;
     return { display, sub, tag };
@@ -80,6 +82,7 @@ export default function TradePage() {
   const [uniformQty, setUniformQty] = useState("");
   const [customAllocs, setCustomAllocs] = useState<Record<string, string>>({});
   const [orderResult, setOrderResult] = useState<PlaceOrderResponse | null>(null);
+  const [quote, setQuote] = useState<QuoteData | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const abortRef = useRef<AbortController>();
 
@@ -111,6 +114,32 @@ export default function TradePage() {
       }
     }, 500);
   }, [searchQuery]);
+
+  // Poll quote data every 3s when an instrument is selected
+  useEffect(() => {
+    if (!instrument) {
+      setQuote(null);
+      return;
+    }
+    let cancelled = false;
+    const symbol = `${instrument.exchange}:${instrument.tradingsymbol}`;
+
+    async function poll() {
+      try {
+        const data = await fetchQuote(symbol);
+        if (!cancelled) setQuote(data);
+      } catch {
+        // silently ignore (market closed, no account logged in, etc.)
+      }
+    }
+
+    poll();
+    const id = setInterval(poll, 3000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [instrument]);
 
   const loggedInAccounts = accounts?.filter(
     (a) => a.token_status.is_logged_in
@@ -187,6 +216,114 @@ export default function TradePage() {
           )
         )}
       </div>
+
+      {/* Quote Panel (persistent across steps 2-4) */}
+      {instrument && step !== "instrument" && (
+        <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-4">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-semibold">
+                  {formatInstrumentDisplay(instrument).display}
+                </span>
+                <span className="rounded bg-white/10 px-1.5 py-0.5 text-[11px] font-medium text-[var(--muted)]">
+                  {instrument.exchange}
+                </span>
+                {instrument.lot_size > 1 && (
+                  <span className="text-xs text-[var(--muted)]">
+                    Lot: {instrument.lot_size}
+                  </span>
+                )}
+              </div>
+              {quote ? (
+                <div className="mt-2 space-y-2">
+                  {/* LTP + Change */}
+                  <div className="flex items-baseline gap-3">
+                    <span className="text-2xl font-bold tabular-nums">
+                      {quote.last_price.toLocaleString("en-IN", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                    <span
+                      className={`text-sm font-medium ${
+                        quote.change >= 0 ? "text-green-400" : "text-red-400"
+                      }`}
+                    >
+                      {quote.change >= 0 ? "+" : ""}
+                      {quote.change.toFixed(2)} ({quote.change_percent.toFixed(2)}
+                      %)
+                    </span>
+                  </div>
+
+                  {/* OHLC + Bid/Ask + Vol/OI */}
+                  <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs">
+                    <div>
+                      <span className="text-[var(--muted)]">O </span>
+                      <span className="tabular-nums">{quote.open.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div>
+                      <span className="text-[var(--muted)]">H </span>
+                      <span className="tabular-nums text-green-400">{quote.high.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div>
+                      <span className="text-[var(--muted)]">L </span>
+                      <span className="tabular-nums text-red-400">{quote.low.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div>
+                      <span className="text-[var(--muted)]">C </span>
+                      <span className="tabular-nums">{quote.close.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="border-l border-[var(--card-border)] pl-4">
+                      <span className="text-[var(--muted)]">Bid </span>
+                      <span className="tabular-nums">{quote.bid.toLocaleString("en-IN")}</span>
+                      <span className="text-[var(--muted)]"> x{quote.bid_qty}</span>
+                    </div>
+                    <div>
+                      <span className="text-[var(--muted)]">Ask </span>
+                      <span className="tabular-nums">{quote.ask.toLocaleString("en-IN")}</span>
+                      <span className="text-[var(--muted)]"> x{quote.ask_qty}</span>
+                    </div>
+                    <div className="border-l border-[var(--card-border)] pl-4">
+                      <span className="text-[var(--muted)]">Vol </span>
+                      <span className="tabular-nums">
+                        {quote.volume >= 100000
+                          ? (quote.volume / 100000).toFixed(2) + "L"
+                          : quote.volume.toLocaleString("en-IN")}
+                      </span>
+                    </div>
+                    {quote.oi > 0 && (
+                      <div>
+                        <span className="text-[var(--muted)]">OI </span>
+                        <span className="tabular-nums">
+                          {quote.oi >= 100000
+                            ? (quote.oi / 100000).toFixed(2) + "L"
+                            : quote.oi.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-2 text-sm text-[var(--muted)]">
+                  Loading quote...
+                </p>
+              )}
+            </div>
+            <button
+              onClick={() => {
+                setStep("instrument");
+                setInstrument(null);
+                setSearchQuery("");
+                setQuote(null);
+              }}
+              className="shrink-0 text-xs text-[var(--muted)] hover:text-white"
+            >
+              Change
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Step 1: Instrument Search */}
       {step === "instrument" && (
@@ -323,15 +460,6 @@ export default function TradePage() {
       {/* Step 3: Order Details + Quantity */}
       {step === "quantity" && instrument && (
         <div className="space-y-4">
-          <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-4 text-sm">
-            <span className="font-medium">
-              {instrument.exchange}:{instrument.tradingsymbol}
-            </span>
-            <span className="ml-2 text-[var(--muted)]">
-              {selectedAccounts.length} accounts
-            </span>
-          </div>
-
           {/* Order params */}
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
             <div>
@@ -542,6 +670,7 @@ export default function TradePage() {
               setStep("instrument");
               setInstrument(null);
               setSearchQuery("");
+              setQuote(null);
               setSelectedAccounts([]);
               setUniformQty("");
               setCustomAllocs({});

@@ -7,9 +7,10 @@ import asyncio
 import json
 import logging
 
+import redis.asyncio as aioredis
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 
-from app.redis import get_redis
+from app.config import settings
 from app.tasks.order_monitor import PUBSUB_CHANNEL
 
 logger = logging.getLogger(__name__)
@@ -19,7 +20,8 @@ router = APIRouter()
 @router.websocket("/ws/orders")
 async def order_updates_ws(websocket: WebSocket):
     await websocket.accept()
-    r = get_redis()
+    # Create a dedicated Redis connection for pub/sub (not from the shared pool)
+    r = aioredis.from_url(settings.redis_url, decode_responses=True)
     pubsub = r.pubsub()
     await pubsub.subscribe(PUBSUB_CHANNEL)
 

@@ -7,7 +7,9 @@ import {
   useUpdateAccount,
   useDeleteAccount,
 } from "@/lib/hooks/useAccounts";
+import { getLoginUrl } from "@/lib/api";
 import { AccountStatusBadge } from "@/components/accounts/AccountStatusBadge";
+import { Pencil, Trash2 } from "lucide-react";
 import type { Account, AccountCreate } from "@/lib/types";
 
 export default function AccountsPage() {
@@ -227,15 +229,35 @@ export default function AccountsPage() {
                     />
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
+                      {account.has_kite_credentials && (
+                        <button
+                          onClick={async () => {
+                            try {
+                              const { login_url } = await getLoginUrl(account.id);
+                              window.open(login_url, "_blank");
+                            } catch {
+                              alert("Failed to generate login URL");
+                            }
+                          }}
+                          className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                            account.token_status.is_logged_in
+                              ? "border border-[var(--card-border)] text-[var(--muted)] hover:text-white hover:border-white/20"
+                              : "bg-green-600 text-white hover:bg-green-700"
+                          }`}
+                        >
+                          {account.token_status.is_logged_in ? "Re-login" : "Login"}
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           setEditing(account);
                           setShowForm(true);
                         }}
-                        className="text-brand-500 hover:text-brand-600 text-sm"
+                        title="Edit"
+                        className="rounded-md p-1.5 text-[var(--muted)] hover:text-brand-500 hover:bg-white/5 transition-colors"
                       >
-                        Edit
+                        <Pencil size={15} />
                       </button>
                       <button
                         onClick={() => {
@@ -243,9 +265,10 @@ export default function AccountsPage() {
                             deleteMutation.mutate(account.id);
                           }
                         }}
-                        className="text-red-400 hover:text-red-500 text-sm"
+                        title="Remove"
+                        className="rounded-md p-1.5 text-[var(--muted)] hover:text-red-400 hover:bg-white/5 transition-colors"
                       >
-                        Remove
+                        <Trash2 size={15} />
                       </button>
                     </div>
                   </td>

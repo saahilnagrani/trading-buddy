@@ -137,4 +137,4 @@ async def sync_order_statuses():
             except Exception as e:
                 logger.error(f"Failed to sync orders for {account.name}: {e}")
 
-        await r.aclose()
+        pass  # Connection pool handles cleanup

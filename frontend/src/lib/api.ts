@@ -9,11 +9,91 @@ import type {
   PlaceOrderResponse,
   OrderItem,
   InstrumentResult,
+  QuoteData,
 } from "./types";
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: (process.env.NEXT_PUBLIC_API_URL || "") + "/api",
 });
+
+// Attach JWT token to all requests
+api.interceptors.request.use((config) => {
+  if (typeof window !== "undefined") {
+    const token = localStorage.getItem("token");
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+  }
+  return config;
+});
+
+// Redirect to login on 401
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (
+      error.response?.status === 401 &&
+      typeof window !== "undefined" &&
+      !window.location.pathname.startsWith("/auth")
+    ) {
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+      window.location.href = "/auth/login";
+    }
+    return Promise.reject(error);
+  }
+);
+
+// === User Auth ===
+
+export interface AuthUser {
+  id: string;
+  username: string;
+  is_admin: boolean;
+  created_at: string;
+}
+
+export interface AuthTokenResponse {
+  access_token: string;
+  user: AuthUser;
+}
+
+export async function loginUser(
+  username: string,
+  password: string
+): Promise<AuthTokenResponse> {
+  const { data } = await api.post<AuthTokenResponse>("/users/login", {
+    username,
+    password,
+  });
+  localStorage.setItem("token", data.access_token);
+  localStorage.setItem("user", JSON.stringify(data.user));
+  return data;
+}
+
+export async function registerUser(
+  username: string,
+  password: string
+): Promise<AuthTokenResponse> {
+  const { data } = await api.post<AuthTokenResponse>("/users/register", {
+    username,
+    password,
+  });
+  localStorage.setItem("token", data.access_token);
+  localStorage.setItem("user", JSON.stringify(data.user));
+  return data;
+}
+
+export async function getMe(): Promise<AuthUser> {
+  const { data } = await api.get<AuthUser>("/users/me");
+  return data;
+}
+
+export function logoutUser() {
+  localStorage.removeItem("token");
+  localStorage.removeItem("user");
+  window.location.href = "/auth/login";
+}
 
 // === Accounts ===
 
@@ -99,6 +179,15 @@ export async function modifyOrder(
   payload: { price?: number; quantity?: number; trigger_price?: number }
 ): Promise<{ status: string; message: string }> {
   const { data } = await api.put(`/orders/${orderId}/modify`, payload);
+  return data;
+}
+
+// === Quotes ===
+
+export async function fetchQuote(symbol: string): Promise<QuoteData> {
+  const { data } = await api.get<QuoteData>("/orders/quote", {
+    params: { symbol },
+  });
   return data;
 }
 

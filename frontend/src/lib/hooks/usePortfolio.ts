@@ -1,9 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import axios from "axios";
-
-const api = axios.create({ baseURL: (process.env.NEXT_PUBLIC_API_URL || "") + "/api" });
+import { api } from "@/lib/api";
 
 export function usePortfolioSummary() {
   return useQuery({

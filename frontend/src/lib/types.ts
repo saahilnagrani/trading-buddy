@@ -120,6 +120,25 @@ export interface InstrumentResult {
   tick_size: number;
 }
 
+// === Quotes ===
+
+export interface QuoteData {
+  last_price: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  change: number;
+  change_percent: number;
+  volume: number;
+  oi: number;
+  bid: number;
+  ask: number;
+  bid_qty: number;
+  ask_qty: number;
+  last_trade_time: string | null;
+}
+
 // === WebSocket ===
 
 export interface OrderUpdate {

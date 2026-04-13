@@ -1,12 +1,15 @@
+import asyncio
+import logging
 import uuid
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select, func, desc
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.database import get_db
-from app.models.account import Account
+from app.models.account import Account, AccountToken
 from app.models.order import Order
 from app.schemas.order import (
     PlaceOrderRequest,
@@ -19,6 +22,8 @@ from app.schemas.order import (
 from app.services.order_engine import place_multi_account_order, cancel_order, modify_order
 from app.utils.instruments import search_instruments, refresh_instruments
 from app.services.kite_service import get_kite_client
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -216,6 +221,71 @@ async def modify_order_endpoint(
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@router.get("/quote")
+async def get_quote(
+    symbol: str = Query(..., description="EXCHANGE:TRADINGSYMBOL, e.g. NSE:NIFTY 50"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Fetch live quote from Zerodha for a single instrument."""
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(Account)
+        .options(selectinload(Account.tokens))
+        .where(Account.is_active.is_(True), Account.kite_api_key.isnot(None))
+    )
+    for account in result.scalars().all():
+        valid_token = next(
+            (t for t in account.tokens if t.is_valid and t.expires_at > now), None
+        )
+        if not valid_token:
+            continue
+        try:
+            kite = get_kite_client(
+                account_id=account.id,
+                api_key=account.kite_api_key,
+                access_token_encrypted=valid_token.access_token,
+            )
+            loop = asyncio.get_event_loop()
+            quotes = await loop.run_in_executor(None, lambda: kite.quote([symbol]))
+            q = quotes.get(symbol)
+            if not q:
+                raise HTTPException(status_code=404, detail=f"No quote data for {symbol}")
+
+            ohlc = q.get("ohlc", {})
+            depth = q.get("depth", {})
+            best_bid = depth.get("buy", [{}])[0] if depth.get("buy") else {}
+            best_ask = depth.get("sell", [{}])[0] if depth.get("sell") else {}
+
+            close = ohlc.get("close", 0)
+            ltp = q.get("last_price", 0)
+            change = ltp - close if close else 0
+            change_pct = (change / close * 100) if close else 0
+
+            return {
+                "last_price": ltp,
+                "open": ohlc.get("open", 0),
+                "high": ohlc.get("high", 0),
+                "low": ohlc.get("low", 0),
+                "close": close,
+                "change": round(change, 2),
+                "change_percent": round(change_pct, 2),
+                "volume": q.get("volume", 0),
+                "oi": q.get("oi", 0),
+                "bid": best_bid.get("price", 0),
+                "ask": best_ask.get("price", 0),
+                "bid_qty": best_bid.get("quantity", 0),
+                "ask_qty": best_ask.get("quantity", 0),
+                "last_trade_time": q.get("last_trade_time"),
+            }
+        except HTTPException:
+            raise
+        except Exception as e:
+            logger.warning(f"Quote fetch failed via {account.name}: {e}")
+            continue
+
+    raise HTTPException(status_code=503, detail="No logged-in account available for quotes")
+
+
 @router.get("/instruments/search", response_model=list[InstrumentSearchResult])
 async def search_instruments_endpoint(
     q: str = Query(..., min_length=2),
@@ -228,8 +298,6 @@ async def search_instruments_endpoint(
     if not results:
         # Find any logged-in account to use for fetching instruments
         now = datetime.now(timezone.utc)
-        from app.models.account import AccountToken
-        from sqlalchemy.orm import selectinload
         acct_result = await db.execute(
             select(Account)
             .options(selectinload(Account.tokens))

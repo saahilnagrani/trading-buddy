@@ -10,8 +10,6 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-import redis.asyncio as aioredis
-
 from app.config import settings
 from app.database import get_db
 from app.models.account import Account, AccountToken
@@ -27,10 +25,15 @@ IST = timezone(timedelta(hours=5, minutes=30))
 
 
 def _next_expiry() -> datetime:
-    """Token expires at 6:00 AM IST the next day."""
+    """Token expires at 6:00 AM IST the next day (or today if logged in before 6 AM)."""
     now = datetime.now(IST)
+    today_6am = datetime.combine(now.date(), time(6, 0), tzinfo=IST)
+    if now < today_6am:
+        # Logged in before 6 AM: token should expire at 6 AM today
+        return today_6am.astimezone(timezone.utc)
+    # Logged in after 6 AM: token expires at 6 AM tomorrow
     tomorrow_6am = datetime.combine(now.date() + timedelta(days=1), time(6, 0), tzinfo=IST)
-    return tomorrow_6am
+    return tomorrow_6am.astimezone(timezone.utc)
 
 
 @router.get("/login-url/{account_id}", response_model=LoginUrlResponse)
@@ -46,7 +49,6 @@ async def get_login_url(account_id: uuid.UUID, db: AsyncSession = Depends(get_db
     # Store pending login account_id in Redis (10 min TTL)
     r = get_redis()
     await r.set("oauth_pending_account", str(account_id), ex=600)
-    await r.aclose()
 
     kite = get_kite_client(account_id=account_id, api_key=account.kite_api_key)
     login_url = kite.login_url()
@@ -67,7 +69,6 @@ async def oauth_callback(
     r = get_redis()
     account_id_str = await r.get("oauth_pending_account")
     await r.delete("oauth_pending_account")
-    await r.aclose()
 
     if not account_id_str:
         return RedirectResponse(url=f"{settings.frontend_url}/login?error=no_pending_login")
@@ -94,13 +95,14 @@ async def oauth_callback(
         return RedirectResponse(url=f"{settings.frontend_url}/login?error=token_exchange_failed")
 
     # Store encrypted token
-    now = datetime.now(IST)
+    now_ist = datetime.now(IST)
+    now_utc = now_ist.astimezone(timezone.utc)
     token = AccountToken(
         account_id=account_id,
         access_token=encrypt_token(access_token),
-        token_date=now.date(),
+        token_date=now_ist.date(),
         is_valid=True,
-        login_time=now,
+        login_time=now_utc,
         expires_at=_next_expiry(),
     )
 
@@ -108,7 +110,7 @@ async def oauth_callback(
     existing = await db.execute(
         select(AccountToken).where(
             AccountToken.account_id == account_id,
-            AccountToken.token_date == now.date(),
+            AccountToken.token_date == now_ist.date(),
         )
     )
     for old_token in existing.scalars().all():

@@ -70,8 +70,6 @@ async def refresh_instruments(account_id=None, kite=None) -> bool:
     except Exception as e:
         logger.error(f"Failed to refresh instruments: {e}")
         return False
-    finally:
-        await r.aclose()
 
 
 async def search_instruments(query: str, exchange: str | None = None, limit: int = 20) -> list[dict]:
@@ -80,60 +78,54 @@ async def search_instruments(query: str, exchange: str | None = None, limit: int
     Returns matching instruments sorted by relevance.
     """
     r = get_redis()
-    try:
-        results = []
-        exchanges = [exchange] if exchange else ["NSE", "NFO"]
-        query_upper = query.upper()
+    results = []
+    exchanges = [exchange] if exchange else ["NSE", "NFO"]
+    query_upper = query.upper()
 
-        for ex in exchanges:
-            cache_key = await _get_cache_key(ex)
-            data = await r.get(cache_key)
-            if not data:
-                continue
+    for ex in exchanges:
+        cache_key = await _get_cache_key(ex)
+        data = await r.get(cache_key)
+        if not data:
+            continue
 
-            instruments = json.loads(data)
-            for inst in instruments:
-                ts = inst["ts"]
-                nm = inst["nm"]
-                if query_upper in ts.upper() or query_upper in nm.upper():
-                    results.append({
-                        "tradingsymbol": ts,
-                        "exchange": inst["ex"],
-                        "instrument_type": inst["it"],
-                        "name": nm,
-                        "lot_size": inst["ls"],
-                        "expiry": inst["exp"],
-                        "strike": inst["st"] if inst["st"] else None,
-                        "tick_size": inst["tk"],
-                    })
+        instruments = json.loads(data)
+        for inst in instruments:
+            ts = inst["ts"]
+            nm = inst["nm"]
+            if query_upper in ts.upper() or query_upper in nm.upper():
+                results.append({
+                    "tradingsymbol": ts,
+                    "exchange": inst["ex"],
+                    "instrument_type": inst["it"],
+                    "name": nm,
+                    "lot_size": inst["ls"],
+                    "expiry": inst["exp"],
+                    "strike": inst["st"] if inst["st"] else None,
+                    "tick_size": inst["tk"],
+                })
 
-            if len(results) >= limit * 2:
-                break
+        if len(results) >= limit * 2:
+            break
 
-        # Sort: exact prefix matches first, then contains
-        results.sort(key=lambda x: (
-            0 if x["tradingsymbol"].upper().startswith(query_upper) else 1,
-            len(x["tradingsymbol"]),
-        ))
+    # Sort: exact prefix matches first, then contains
+    results.sort(key=lambda x: (
+        0 if x["tradingsymbol"].upper().startswith(query_upper) else 1,
+        len(x["tradingsymbol"]),
+    ))
 
-        return results[:limit]
-    finally:
-        await r.aclose()
+    return results[:limit]
 
 
 async def get_lot_size(exchange: str, tradingsymbol: str) -> int:
     """Look up lot size for a specific instrument from cache."""
     r = get_redis()
-    try:
-        cache_key = await _get_cache_key(exchange)
-        data = await r.get(cache_key)
-        if not data:
-            return 1
-
-        instruments = json.loads(data)
-        for inst in instruments:
-            if inst["ts"] == tradingsymbol:
-                return inst["ls"]
+    cache_key = await _get_cache_key(exchange)
+    data = await r.get(cache_key)
+    if not data:
         return 1
-    finally:
-        await r.aclose()
+
+    instruments = json.loads(data)
+    for inst in instruments:
+        if inst["ts"] == tradingsymbol:
+            return inst["ls"]
+    return 1

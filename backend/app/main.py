@@ -1,10 +1,11 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
-from app.routers import accounts, auth, orders, ws, baskets, strategies, portfolio, notifications
+from app.routers import accounts, auth, orders, ws, baskets, strategies, portfolio, notifications, users
+from app.routers.users import get_current_user
 from app.tasks.scheduler import start_scheduler, stop_scheduler
 
 
@@ -33,13 +34,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Public routes (no auth required)
+app.include_router(users.router, prefix="/api/users", tags=["users"])
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(accounts.router, prefix="/api/accounts", tags=["accounts"])
-app.include_router(orders.router, prefix="/api/orders", tags=["orders"])
-app.include_router(baskets.router, prefix="/api/baskets", tags=["baskets"])
-app.include_router(strategies.router, prefix="/api/strategies", tags=["strategies"])
-app.include_router(portfolio.router, prefix="/api/portfolio", tags=["portfolio"])
-app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
+
+# Protected routes (require JWT auth)
+_auth = [Depends(get_current_user)]
+app.include_router(accounts.router, prefix="/api/accounts", tags=["accounts"], dependencies=_auth)
+app.include_router(orders.router, prefix="/api/orders", tags=["orders"], dependencies=_auth)
+app.include_router(baskets.router, prefix="/api/baskets", tags=["baskets"], dependencies=_auth)
+app.include_router(strategies.router, prefix="/api/strategies", tags=["strategies"], dependencies=_auth)
+app.include_router(portfolio.router, prefix="/api/portfolio", tags=["portfolio"], dependencies=_auth)
+app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"], dependencies=_auth)
 app.include_router(ws.router)
 
 
