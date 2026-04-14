@@ -208,7 +208,7 @@ function AccountsContent() {
             <div>
               <div className="flex items-center justify-between mb-1">
                 <label className="block text-sm text-[var(--muted)]">
-                  Kite User ID
+                  Kite User ID *
                   {editing && editing.kite_user_id && !userIdUnlocked && (
                     <span className="ml-2 text-[10px] uppercase tracking-wide text-[var(--muted)]/70">
                       locked
@@ -235,14 +235,15 @@ function AccountsContent() {
               </div>
               <input
                 name="kite_user_id"
+                required={!editing}
                 readOnly={!!(editing && editing.kite_user_id && !userIdUnlocked)}
                 defaultValue={editing?.kite_user_id ?? ""}
-                className={`w-full rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 text-sm font-mono ${
+                className={`w-full rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 text-sm font-mono [&:not(:placeholder-shown)]:uppercase ${
                   editing && editing.kite_user_id && !userIdUnlocked
                     ? "opacity-60 cursor-not-allowed"
                     : ""
                 }`}
-                placeholder="e.g., AB1234 (optional, auto-filled on first login)"
+                placeholder="e.g., AB1234"
               />
               <p className="mt-1 text-[10px] text-[var(--muted)]">
                 Binds this account to a specific Zerodha user. Login is

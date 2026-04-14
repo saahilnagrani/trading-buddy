@@ -1,7 +1,7 @@
 import uuid
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class AccountCreate(BaseModel):
@@ -9,8 +9,15 @@ class AccountCreate(BaseModel):
     owner_name: str | None = Field(None, max_length=100)
     kite_api_key: str | None = Field(None, max_length=100)
     kite_api_secret: str | None = Field(None, max_length=200)
-    kite_user_id: str | None = Field(None, max_length=20)
+    kite_user_id: str = Field(..., min_length=1, max_length=20)
     max_lots: int = Field(1, ge=1)
+
+    @field_validator("kite_user_id")
+    @classmethod
+    def _normalize_user_id(cls, v: str) -> str:
+        # Kite returns user IDs uppercased (e.g., "AB1234"). Normalize so a
+        # lowercase typo doesn't later trip the mismatch check in auth.py.
+        return v.strip().upper()
 
 
 class AccountUpdate(BaseModel):
@@ -20,6 +27,14 @@ class AccountUpdate(BaseModel):
     kite_api_secret: str | None = Field(None, max_length=200)
     kite_user_id: str | None = Field(None, max_length=20)
     is_active: bool | None = None
+
+    @field_validator("kite_user_id")
+    @classmethod
+    def _normalize_user_id(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip().upper()
+        return v or None
     max_lots: int | None = Field(None, ge=1)
     max_order_value: float | None = None
     max_daily_orders: int | None = Field(None, ge=1)
