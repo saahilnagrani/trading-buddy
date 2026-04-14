@@ -11,7 +11,7 @@ import {
 import { getLoginUrl, logoutAccount } from "@/lib/api";
 import { AccountStatusBadge } from "@/components/accounts/AccountStatusBadge";
 import { formatTime } from "@/lib/utils/formatters";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil, Trash2, ChevronDown, ChevronUp, ExternalLink, Info } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
 import type { Account, AccountCreate } from "@/lib/types";
 
@@ -34,6 +34,7 @@ function AccountsContent() {
   const [editing, setEditing] = useState<Account | null>(null);
   const [showSecret, setShowSecret] = useState(false);
   const [userIdUnlocked, setUserIdUnlocked] = useState(false);
+  const [showCredentialHelp, setShowCredentialHelp] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Handle OAuth callback results from ?success=... or ?error=... URL params
@@ -111,6 +112,7 @@ function AccountsContent() {
             setEditing(null);
             setShowSecret(false);
             setUserIdUnlocked(false);
+            setShowCredentialHelp(false);
             setShowForm(true);
           }}
           className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
@@ -174,6 +176,218 @@ function AccountsContent() {
               />
             </div>
           </div>
+          {/* ── Credential Setup Guide ───────────────────────────────── */}
+          <div className="rounded-md border border-[var(--card-border)] overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setShowCredentialHelp((v) => !v)}
+              className="flex w-full items-center justify-between px-4 py-3 text-sm hover:bg-white/[0.03] transition-colors"
+            >
+              <span className="flex items-center gap-2 text-[var(--muted)]">
+                <Info size={14} className="shrink-0" />
+                How to get Kite API credentials
+              </span>
+              {showCredentialHelp
+                ? <ChevronUp size={14} className="text-[var(--muted)] shrink-0" />
+                : <ChevronDown size={14} className="text-[var(--muted)] shrink-0" />}
+            </button>
+
+            {showCredentialHelp && (
+              <div className="border-t border-[var(--card-border)] bg-[var(--background)] px-4 py-5 space-y-6 text-sm">
+                <p className="text-[var(--muted)] text-xs leading-relaxed">
+                  Each Zerodha user requires their own Kite Connect app. Create one app per user — never reuse API keys across accounts.
+                </p>
+
+                <ol className="space-y-5">
+                  {/* Step 1 */}
+                  <li className="flex gap-3">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-600/20 text-[10px] font-semibold text-brand-400 mt-0.5">
+                      1
+                    </span>
+                    <div className="space-y-1 min-w-0">
+                      <p className="text-white/90 font-medium text-sm">Log in to the Kite Connect developer portal</p>
+                      <p className="text-xs text-[var(--muted)] leading-relaxed">
+                        Go to the developer portal and sign in with the Zerodha credentials of the account owner.
+                      </p>
+                      <a
+                        href="https://developers.kite.trade/"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                      >
+                        developers.kite.trade <ExternalLink size={10} />
+                      </a>
+                      {/*
+                        TODO: Add screenshot at public/screenshots/kite-01-developer-portal.png
+                        Content: The Kite Connect developer portal homepage (https://developers.kite.trade/)
+                        showing the dashboard with existing apps and the "Create new app" button.
+                      */}
+                    </div>
+                  </li>
+
+                  {/* Step 2 */}
+                  <li className="flex gap-3">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-600/20 text-[10px] font-semibold text-brand-400 mt-0.5">
+                      2
+                    </span>
+                    <div className="space-y-1 min-w-0">
+                      <p className="text-white/90 font-medium text-sm">Create a new app for this user</p>
+                      <p className="text-xs text-[var(--muted)] leading-relaxed">
+                        Click <strong className="text-white/70">Create new app</strong> and fill in the details.
+                        Use a descriptive name like <em className="text-white/60">"Trading Buddy — AB1234"</em> so you can identify it later.
+                        Select <strong className="text-white/70">Connect</strong> as the app type.
+                      </p>
+                      <a
+                        href="https://developers.kite.trade/apps/new"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                      >
+                        Create new app <ExternalLink size={10} />
+                      </a>
+                      {/*
+                        TODO: Add screenshot at public/screenshots/kite-02-create-app.png
+                        Content: The "Create new app" form on developers.kite.trade showing the
+                        Name, App type, and Redirect URL fields before submission.
+                      */}
+                    </div>
+                  </li>
+
+                  {/* Step 3 */}
+                  <li className="flex gap-3">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-600/20 text-[10px] font-semibold text-brand-400 mt-0.5">
+                      3
+                    </span>
+                    <div className="space-y-1 min-w-0">
+                      <p className="text-white/90 font-medium text-sm">Set the Redirect URL in the app</p>
+                      <p className="text-xs text-[var(--muted)] leading-relaxed">
+                        In the app form, set <strong className="text-white/70">Redirect URL</strong> to the trading-buddy backend callback.
+                        This must match exactly (including http vs https).
+                      </p>
+                      <code className="block mt-1.5 rounded bg-[var(--card)] border border-[var(--card-border)] px-2.5 py-1.5 text-[11px] font-mono text-[var(--muted)] select-all break-all">
+                        {process.env.NEXT_PUBLIC_API_URL
+                          ? `${process.env.NEXT_PUBLIC_API_URL}/api/auth/callback`
+                          : "http://localhost:8000/api/auth/callback"}
+                      </code>
+                      <p className="text-[10px] text-[var(--muted)]/60 leading-relaxed">
+                        For production: set <code className="font-mono">NEXT_PUBLIC_API_URL</code> in your frontend environment to your deployed backend URL.
+                      </p>
+                      {/*
+                        TODO: Add screenshot at public/screenshots/kite-03-redirect-url.png
+                        Content: The app creation form with the Redirect URL field filled in,
+                        showing exactly where to paste the callback URL.
+                      */}
+                    </div>
+                  </li>
+
+                  {/* Step 4 */}
+                  <li className="flex gap-3">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-600/20 text-[10px] font-semibold text-brand-400 mt-0.5">
+                      4
+                    </span>
+                    <div className="space-y-1 min-w-0">
+                      <p className="text-white/90 font-medium text-sm">Copy the API Key and API Secret</p>
+                      <p className="text-xs text-[var(--muted)] leading-relaxed">
+                        After saving the app, open it from your dashboard. Copy the{" "}
+                        <strong className="text-white/70">API Key</strong> and{" "}
+                        <strong className="text-white/70">API Secret</strong> and paste them into the fields below.
+                      </p>
+                      <a
+                        href="https://developers.kite.trade/apps"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                      >
+                        My apps <ExternalLink size={10} />
+                      </a>
+                      {/*
+                        TODO: Add screenshot at public/screenshots/kite-04-api-credentials.png
+                        Content: The app detail page on developers.kite.trade showing the
+                        API Key and API Secret fields with copy buttons highlighted.
+                      */}
+                    </div>
+                  </li>
+
+                  {/* Step 5 */}
+                  <li className="flex gap-3">
+                    <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-brand-600/20 text-[10px] font-semibold text-brand-400 mt-0.5">
+                      5
+                    </span>
+                    <div className="space-y-1 min-w-0">
+                      <p className="text-white/90 font-medium text-sm">Find the user&apos;s Kite User ID</p>
+                      <p className="text-xs text-[var(--muted)] leading-relaxed">
+                        The Kite User ID is the Zerodha client ID for the account owner — a 6-character code like{" "}
+                        <code className="rounded bg-[var(--card)] border border-[var(--card-border)] px-1 py-0.5 text-[11px] font-mono">
+                          AB1234
+                        </code>.
+                        The owner can find it on their Kite profile page or Zerodha account dashboard.
+                      </p>
+                      <a
+                        href="https://kite.zerodha.com/dashboard"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-xs text-brand-400 hover:text-brand-300 transition-colors"
+                      >
+                        Kite dashboard <ExternalLink size={10} />
+                      </a>
+                      {/*
+                        TODO: Add screenshot at public/screenshots/kite-05-user-id.png
+                        Content: The Kite profile/account page showing the client ID (user ID)
+                        field, typically visible in the top-right menu or profile section.
+                      */}
+                    </div>
+                  </li>
+                </ol>
+
+                {/* Best practices callout */}
+                <div className="rounded-md border border-yellow-500/20 bg-yellow-500/5 px-3 py-3 space-y-2">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-yellow-400/80">
+                    Best practices
+                  </p>
+                  <ul className="space-y-1.5 text-[11px] text-[var(--muted)] leading-relaxed">
+                    <li className="flex gap-2">
+                      <span className="text-yellow-400/50 mt-px shrink-0">•</span>
+                      <span>
+                        <strong className="text-white/70">One app per user:</strong>{" "}
+                        sharing API keys across accounts means a suspension or rate-limit on one will block all of them.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-yellow-400/50 mt-px shrink-0">•</span>
+                      <span>
+                        <strong className="text-white/70">Keep the API Secret private:</strong>{" "}
+                        treat it like a password — never commit it to version control or share it over chat.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-yellow-400/50 mt-px shrink-0">•</span>
+                      <span>
+                        <strong className="text-white/70">Redirect URL must match exactly:</strong>{" "}
+                        a mismatch causes Kite to reject the OAuth callback with an &quot;Invalid redirect URL&quot; error.
+                      </span>
+                    </li>
+                    <li className="flex gap-2">
+                      <span className="text-yellow-400/50 mt-px shrink-0">•</span>
+                      <span>
+                        <strong className="text-white/70">Tokens expire at 6:00 AM IST daily:</strong>{" "}
+                        each user must log in again at the start of every trading day — this is enforced by Zerodha, not trading-buddy.
+                      </span>
+                    </li>
+                  </ul>
+                </div>
+
+                <a
+                  href="https://kite.trade/docs/connect/v3/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs text-[var(--muted)] hover:text-white transition-colors"
+                >
+                  Full Kite Connect API documentation <ExternalLink size={10} />
+                </a>
+              </div>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-sm text-[var(--muted)] mb-1">
@@ -386,6 +600,7 @@ function AccountsContent() {
                         onClick={() => {
                           setEditing(account);
                           setUserIdUnlocked(false);
+                          setShowCredentialHelp(false);
                           setShowForm(true);
                         }}
                         title="Edit"
