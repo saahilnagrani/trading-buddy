@@ -15,3 +15,17 @@ body {
   color: var(--foreground);
   font-family: system-ui, -apple-system, sans-serif;
 }
+
+/*
+ * iOS Safari auto-zooms on any focused input whose computed font-size is under
+ * 16px. The app uses text-sm (14px) inputs for density, so on mobile we force
+ * the font-size back to 16px to prevent that zoom-and-pan disruption, and drop
+ * back to the design size at the sm breakpoint (640px) where desktop begins.
+ */
+@media (max-width: 639px) {
+  input:not([type="checkbox"]):not([type="radio"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}

@@ -80,7 +80,83 @@ export default function OrdersPage() {
       ) : orders.length === 0 ? (
         <p className="text-[var(--muted)]">No orders found.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-[var(--card-border)]">
+        <>
+        {/* Mobile card list */}
+        <div className="space-y-3 lg:hidden">
+          {orders.map((o) => (
+            <div
+              key={o.id}
+              className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-4 space-y-2"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold truncate">{o.tradingsymbol}</span>
+                    <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-[var(--muted)]">
+                      {o.exchange}
+                    </span>
+                    <span
+                      className={
+                        o.transaction_type === "BUY"
+                          ? "text-green-400 text-xs font-medium"
+                          : "text-red-400 text-xs font-medium"
+                      }
+                    >
+                      {o.transaction_type}
+                    </span>
+                  </div>
+                  <p className="text-[10px] text-[var(--muted)] mt-0.5">
+                    {o.account_name || "-"} · {formatTime(o.placed_at || o.created_at)}
+                  </p>
+                </div>
+                <span
+                  className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                    STATUS_COLORS[o.status] || STATUS_COLORS.PENDING
+                  }`}
+                >
+                  {o.status}
+                </span>
+              </div>
+              <div className="grid grid-cols-4 gap-2 text-xs pt-1">
+                <div>
+                  <p className="text-[var(--muted)] text-[10px]">Qty</p>
+                  <p>{o.quantity}</p>
+                </div>
+                <div>
+                  <p className="text-[var(--muted)] text-[10px]">Price</p>
+                  <p>{o.price ? parseFloat(String(o.price)).toFixed(2) : "MKT"}</p>
+                </div>
+                <div>
+                  <p className="text-[var(--muted)] text-[10px]">Filled</p>
+                  <p>{o.filled_quantity}</p>
+                </div>
+                <div>
+                  <p className="text-[var(--muted)] text-[10px]">Avg</p>
+                  <p>
+                    {o.average_price
+                      ? parseFloat(String(o.average_price)).toFixed(2)
+                      : "-"}
+                  </p>
+                </div>
+              </div>
+              {["PLACED", "OPEN"].includes(o.status) && (
+                <button
+                  onClick={() => {
+                    if (confirm("Cancel this order?")) {
+                      cancelMut.mutate(o.id);
+                    }
+                  }}
+                  className="w-full rounded-md border border-red-500/30 px-3 py-2 text-xs font-medium text-red-400 hover:text-red-300 hover:border-red-500/50 transition-colors"
+                >
+                  Cancel Order
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden lg:block overflow-x-auto rounded-lg border border-[var(--card-border)]">
           <table className="w-full text-sm">
             <thead className="bg-[var(--card)] text-left text-[var(--muted)]">
               <tr>
@@ -160,6 +236,7 @@ export default function OrdersPage() {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );

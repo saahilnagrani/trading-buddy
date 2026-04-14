@@ -66,7 +66,46 @@ export default function AccountPortfolioPage() {
       <div className="space-y-2">
         <h2 className="text-lg font-medium">Open Positions</h2>
         {positions && positions.length > 0 ? (
-          <div className="overflow-x-auto rounded-lg border border-[var(--card-border)]">
+          <>
+          {/* Mobile cards */}
+          <div className="space-y-2 lg:hidden">
+            {positions.map((p: any) => (
+              <div key={p.id} className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium truncate">{p.tradingsymbol}</span>
+                      <span className="text-[10px] text-[var(--muted)]">{p.exchange}</span>
+                      <span className="text-[10px] text-[var(--muted)] uppercase">{p.product}</span>
+                    </div>
+                  </div>
+                  <span className={`text-sm font-semibold tabular-nums shrink-0 ${(p.pnl ?? 0) >= 0 ? "text-profit" : "text-loss"}`}>
+                    {p.pnl != null ? formatINR(p.pnl) : "-"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-4 gap-2 mt-2 text-xs">
+                  <div>
+                    <p className="text-[var(--muted)] text-[10px]">Qty</p>
+                    <p className={`tabular-nums ${p.quantity > 0 ? "text-green-400" : "text-red-400"}`}>{p.quantity}</p>
+                  </div>
+                  <div>
+                    <p className="text-[var(--muted)] text-[10px]">Avg</p>
+                    <p className="tabular-nums">{p.average_price?.toFixed(2) ?? "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[var(--muted)] text-[10px]">LTP</p>
+                    <p className="tabular-nums">{p.last_price?.toFixed(2) ?? "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[var(--muted)] text-[10px]">Value</p>
+                    <p className="tabular-nums">{p.value != null ? formatINR(p.value) : "-"}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Desktop table */}
+          <div className="hidden lg:block overflow-x-auto rounded-lg border border-[var(--card-border)]">
             <table className="w-full text-sm">
               <thead className="bg-[var(--card)] text-left text-[var(--muted)]">
                 <tr>
@@ -101,6 +140,7 @@ export default function AccountPortfolioPage() {
               </tbody>
             </table>
           </div>
+          </>
         ) : (
           <p className="text-sm text-[var(--muted)]">No open positions.</p>
         )}
@@ -110,7 +150,33 @@ export default function AccountPortfolioPage() {
       <div className="space-y-2">
         <h2 className="text-lg font-medium">Trade History (60 days)</h2>
         {trades && trades.length > 0 ? (
-          <div className="overflow-x-auto rounded-lg border border-[var(--card-border)]">
+          <>
+          {/* Mobile cards */}
+          <div className="space-y-2 lg:hidden">
+            {trades.map((t: any) => (
+              <div key={t.id} className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium truncate">{t.tradingsymbol}</span>
+                      <span className={`text-xs font-medium ${t.transaction_type === "BUY" ? "text-green-400" : "text-red-400"}`}>
+                        {t.transaction_type}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-[var(--muted)] mt-0.5">{formatDate(t.trade_date)}</p>
+                  </div>
+                  <div className="text-right shrink-0 text-xs">
+                    <p className="text-[10px] text-[var(--muted)]">Qty × Price</p>
+                    <p className="tabular-nums">
+                      {t.quantity} × {t.price ? parseFloat(t.price).toFixed(2) : "-"}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Desktop table */}
+          <div className="hidden lg:block overflow-x-auto rounded-lg border border-[var(--card-border)]">
             <table className="w-full text-sm">
               <thead className="bg-[var(--card)] text-left text-[var(--muted)]">
                 <tr>
@@ -136,6 +202,7 @@ export default function AccountPortfolioPage() {
               </tbody>
             </table>
           </div>
+          </>
         ) : (
           <p className="text-sm text-[var(--muted)]">No trades in the last 60 days.</p>
         )}

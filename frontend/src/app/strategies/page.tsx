@@ -233,73 +233,84 @@ export default function StrategiesPage() {
               </button>
             </div>
             {legs.map((leg, idx) => (
-              <div key={idx} className="grid grid-cols-3 gap-2 sm:grid-cols-7 items-end rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-3">
-                <div>
-                  <label className="block text-xs text-[var(--muted)]">Type</label>
-                  <select
-                    value={leg.instrument_type}
-                    onChange={(e) => updateLeg(idx, "instrument_type", e.target.value)}
-                    className="w-full rounded border border-[var(--card-border)] bg-[var(--background)] px-2 py-1.5 text-sm"
+              <div key={idx} className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-3">
+                <div className="flex items-center justify-between mb-2 lg:hidden">
+                  <span className="text-xs text-[var(--muted)]">Leg {idx + 1}</span>
+                  <button
+                    onClick={() => removeLeg(idx)}
+                    className="text-red-400 hover:text-red-500 text-xs"
                   >
-                    <option value="CE">CE</option>
-                    <option value="PE">PE</option>
-                    <option value="FUT">FUT</option>
-                  </select>
+                    Remove
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-xs text-[var(--muted)]">Strike</label>
-                  <input
-                    value={leg.strike}
-                    onChange={(e) => updateLeg(idx, "strike", e.target.value)}
-                    className="w-full rounded border border-[var(--card-border)] bg-[var(--background)] px-2 py-1.5 text-sm"
-                    placeholder="24000"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-[var(--muted)]">Side</label>
-                  <select
-                    value={leg.transaction_type}
-                    onChange={(e) => updateLeg(idx, "transaction_type", e.target.value)}
-                    className={`w-full rounded border border-[var(--card-border)] px-2 py-1.5 text-sm ${
-                      leg.transaction_type === "BUY" ? "bg-green-900/20" : "bg-red-900/20"
-                    }`}
+                <div className="grid grid-cols-2 gap-2 lg:grid-cols-7 lg:items-end">
+                  <div>
+                    <label className="block text-xs text-[var(--muted)]">Type</label>
+                    <select
+                      value={leg.instrument_type}
+                      onChange={(e) => updateLeg(idx, "instrument_type", e.target.value)}
+                      className="w-full rounded border border-[var(--card-border)] bg-[var(--background)] px-2 py-1.5 text-sm"
+                    >
+                      <option value="CE">CE</option>
+                      <option value="PE">PE</option>
+                      <option value="FUT">FUT</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[var(--muted)]">Strike</label>
+                    <input
+                      value={leg.strike}
+                      onChange={(e) => updateLeg(idx, "strike", e.target.value)}
+                      className="w-full rounded border border-[var(--card-border)] bg-[var(--background)] px-2 py-1.5 text-sm"
+                      placeholder="24000"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[var(--muted)]">Side</label>
+                    <select
+                      value={leg.transaction_type}
+                      onChange={(e) => updateLeg(idx, "transaction_type", e.target.value)}
+                      className={`w-full rounded border border-[var(--card-border)] px-2 py-1.5 text-sm ${
+                        leg.transaction_type === "BUY" ? "bg-green-900/20" : "bg-red-900/20"
+                      }`}
+                    >
+                      <option value="BUY">BUY</option>
+                      <option value="SELL">SELL</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[var(--muted)]">Qty</label>
+                    <input
+                      value={leg.quantity}
+                      onChange={(e) => updateLeg(idx, "quantity", e.target.value)}
+                      className="w-full rounded border border-[var(--card-border)] bg-[var(--background)] px-2 py-1.5 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs text-[var(--muted)]">Premium</label>
+                    <input
+                      value={leg.price}
+                      onChange={(e) => updateLeg(idx, "price", e.target.value)}
+                      className="w-full rounded border border-[var(--card-border)] bg-[var(--background)] px-2 py-1.5 text-sm"
+                      placeholder="0"
+                    />
+                  </div>
+                  <div className="col-span-2 lg:col-span-1">
+                    <label className="block text-xs text-[var(--muted)]">Symbol</label>
+                    <input
+                      value={leg.tradingsymbol}
+                      onChange={(e) => updateLeg(idx, "tradingsymbol", e.target.value)}
+                      className="w-full rounded border border-[var(--card-border)] bg-[var(--background)] px-2 py-1.5 text-sm"
+                      placeholder="NIFTY2504..."
+                    />
+                  </div>
+                  <button
+                    onClick={() => removeLeg(idx)}
+                    className="hidden lg:block text-red-400 hover:text-red-500 text-sm self-end pb-1"
                   >
-                    <option value="BUY">BUY</option>
-                    <option value="SELL">SELL</option>
-                  </select>
+                    Remove
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-xs text-[var(--muted)]">Qty</label>
-                  <input
-                    value={leg.quantity}
-                    onChange={(e) => updateLeg(idx, "quantity", e.target.value)}
-                    className="w-full rounded border border-[var(--card-border)] bg-[var(--background)] px-2 py-1.5 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-[var(--muted)]">Premium</label>
-                  <input
-                    value={leg.price}
-                    onChange={(e) => updateLeg(idx, "price", e.target.value)}
-                    className="w-full rounded border border-[var(--card-border)] bg-[var(--background)] px-2 py-1.5 text-sm"
-                    placeholder="0"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs text-[var(--muted)]">Symbol</label>
-                  <input
-                    value={leg.tradingsymbol}
-                    onChange={(e) => updateLeg(idx, "tradingsymbol", e.target.value)}
-                    className="w-full rounded border border-[var(--card-border)] bg-[var(--background)] px-2 py-1.5 text-sm"
-                    placeholder="NIFTY2504..."
-                  />
-                </div>
-                <button
-                  onClick={() => removeLeg(idx)}
-                  className="text-red-400 hover:text-red-500 text-sm self-end pb-1"
-                >
-                  Remove
-                </button>
               </div>
             ))}
           </div>
@@ -307,9 +318,9 @@ export default function StrategiesPage() {
           {/* Payoff Chart */}
           {payoff.points.length > 0 && (
             <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-4">
-              <div className="flex items-center justify-between mb-3">
+              <div className="flex flex-col gap-2 mb-3 sm:flex-row sm:items-center sm:justify-between">
                 <p className="text-sm font-medium">Payoff at Expiry</p>
-                <div className="flex gap-4 text-xs">
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
                   <span className="text-green-400">
                     Max Profit: {payoff.maxProfit !== null ? formatINR(payoff.maxProfit) : "Unlimited"}
                   </span>
@@ -363,9 +374,9 @@ export default function StrategiesPage() {
               key={s.id}
               className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-4"
             >
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-medium">{s.name}</h3>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <h3 className="font-medium truncate">{s.name}</h3>
                   <p className="text-sm text-[var(--muted)]">
                     {s.underlying} | {s.strategy_type} | {s.legs.length} legs |{" "}
                     <span
@@ -382,7 +393,7 @@ export default function StrategiesPage() {
                   </p>
                 </div>
                 {s.status === "DRAFT" && (
-                  <div className="flex gap-2 items-center">
+                  <div className="flex flex-wrap gap-2 items-center">
                     <select
                       onChange={(e) => {
                         const aid = e.target.value;

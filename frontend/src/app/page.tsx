@@ -58,34 +58,72 @@ export default function DashboardPage() {
 
       {/* Per-account breakdown */}
       {summary?.accounts && summary.accounts.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-[var(--card-border)]">
-          <table className="w-full text-sm">
-            <thead className="bg-[var(--card)] text-left text-[var(--muted)]">
-              <tr>
-                <th className="px-4 py-3 font-medium">Account</th>
-                <th className="px-4 py-3 font-medium">P&L</th>
-                <th className="px-4 py-3 font-medium">Realized</th>
-                <th className="px-4 py-3 font-medium">Unrealized</th>
-                <th className="px-4 py-3 font-medium">Margin Used</th>
-                <th className="px-4 py-3 font-medium">Positions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-[var(--card-border)]">
-              {summary.accounts.map((a: any) => (
-                <tr key={a.account_id} className="bg-[var(--card)]">
-                  <td className="px-4 py-3 font-medium">{a.account_name}</td>
-                  <td className={`px-4 py-3 ${a.total_pnl >= 0 ? "text-profit" : "text-loss"}`}>
+        <>
+          {/* Mobile card list */}
+          <div className="space-y-3 lg:hidden">
+            {summary.accounts.map((a: any) => (
+              <div
+                key={a.account_id}
+                className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-4"
+              >
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <h3 className="font-medium truncate">{a.account_name}</h3>
+                  <span className={`text-sm font-semibold tabular-nums ${a.total_pnl >= 0 ? "text-profit" : "text-loss"}`}>
                     {formatINR(a.total_pnl)}
-                  </td>
-                  <td className="px-4 py-3">{formatINR(a.realized_pnl)}</td>
-                  <td className="px-4 py-3">{formatINR(a.unrealized_pnl)}</td>
-                  <td className="px-4 py-3">{formatINR(a.margin_used)}</td>
-                  <td className="px-4 py-3">{a.position_count}</td>
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <div>
+                    <p className="text-[var(--muted)]">Realized</p>
+                    <p className="tabular-nums">{formatINR(a.realized_pnl)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[var(--muted)]">Unrealized</p>
+                    <p className="tabular-nums">{formatINR(a.unrealized_pnl)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[var(--muted)]">Margin Used</p>
+                    <p className="tabular-nums">{formatINR(a.margin_used)}</p>
+                  </div>
+                  <div>
+                    <p className="text-[var(--muted)]">Positions</p>
+                    <p className="tabular-nums">{a.position_count}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Desktop table */}
+          <div className="hidden lg:block overflow-x-auto rounded-lg border border-[var(--card-border)]">
+            <table className="w-full text-sm">
+              <thead className="bg-[var(--card)] text-left text-[var(--muted)]">
+                <tr>
+                  <th className="px-4 py-3 font-medium">Account</th>
+                  <th className="px-4 py-3 font-medium">P&L</th>
+                  <th className="px-4 py-3 font-medium">Realized</th>
+                  <th className="px-4 py-3 font-medium">Unrealized</th>
+                  <th className="px-4 py-3 font-medium">Margin Used</th>
+                  <th className="px-4 py-3 font-medium">Positions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-[var(--card-border)]">
+                {summary.accounts.map((a: any) => (
+                  <tr key={a.account_id} className="bg-[var(--card)]">
+                    <td className="px-4 py-3 font-medium">{a.account_name}</td>
+                    <td className={`px-4 py-3 ${a.total_pnl >= 0 ? "text-profit" : "text-loss"}`}>
+                      {formatINR(a.total_pnl)}
+                    </td>
+                    <td className="px-4 py-3">{formatINR(a.realized_pnl)}</td>
+                    <td className="px-4 py-3">{formatINR(a.unrealized_pnl)}</td>
+                    <td className="px-4 py-3">{formatINR(a.margin_used)}</td>
+                    <td className="px-4 py-3">{a.position_count}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
 
       {/* P&L Chart */}
@@ -119,7 +157,41 @@ export default function DashboardPage() {
       {positions && positions.length > 0 && (
         <div className="space-y-2">
           <p className="text-sm font-medium">Open Positions</p>
-          <div className="overflow-x-auto rounded-lg border border-[var(--card-border)]">
+          {/* Mobile cards */}
+          <div className="space-y-2 lg:hidden">
+            {positions.map((p: any) => (
+              <div key={p.id} className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium truncate">{p.tradingsymbol}</span>
+                      <span className="text-[10px] text-[var(--muted)]">{p.exchange}</span>
+                    </div>
+                    <p className="text-[10px] text-[var(--muted)] mt-0.5">{p.account_name}</p>
+                  </div>
+                  <span className={`text-sm font-semibold tabular-nums shrink-0 ${(p.pnl ?? 0) >= 0 ? "text-profit" : "text-loss"}`}>
+                    {p.pnl != null ? formatINR(p.pnl) : "-"}
+                  </span>
+                </div>
+                <div className="grid grid-cols-3 gap-2 mt-2 text-xs">
+                  <div>
+                    <p className="text-[var(--muted)] text-[10px]">Qty</p>
+                    <p className={`tabular-nums ${p.quantity > 0 ? "text-green-400" : "text-red-400"}`}>{p.quantity}</p>
+                  </div>
+                  <div>
+                    <p className="text-[var(--muted)] text-[10px]">Avg</p>
+                    <p className="tabular-nums">{p.average_price?.toFixed(2) ?? "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[var(--muted)] text-[10px]">LTP</p>
+                    <p className="tabular-nums">{p.last_price?.toFixed(2) ?? "-"}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Desktop table */}
+          <div className="hidden lg:block overflow-x-auto rounded-lg border border-[var(--card-border)]">
             <table className="w-full text-sm">
               <thead className="bg-[var(--card)] text-left text-[var(--muted)]">
                 <tr>

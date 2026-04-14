@@ -159,7 +159,7 @@ export default function BasketsPage() {
               </button>
             </div>
             {newItems.map((item, idx) => (
-              <div key={idx} className="grid grid-cols-2 gap-2 sm:grid-cols-6 items-end">
+              <div key={idx} className="grid grid-cols-2 gap-2 lg:grid-cols-6 items-end rounded-md border border-[var(--card-border)] bg-[var(--background)]/40 p-2 lg:border-0 lg:bg-transparent lg:p-0">
                 <input
                   value={item.tradingsymbol}
                   onChange={(e) => {
@@ -257,18 +257,18 @@ export default function BasketsPage() {
               key={basket.id}
               className="rounded-lg border border-[var(--card-border)] bg-[var(--card)]"
             >
-              <div className="flex items-center justify-between p-4">
-                <div>
-                  <h3 className="font-medium">{basket.name}</h3>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4">
+                <div className="min-w-0">
+                  <h3 className="font-medium truncate">{basket.name}</h3>
                   {basket.description && (
-                    <p className="text-sm text-[var(--muted)]">{basket.description}</p>
+                    <p className="text-sm text-[var(--muted)] truncate">{basket.description}</p>
                   )}
                   <p className="text-xs text-[var(--muted)]">{basket.items.length} items</p>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2 shrink-0">
                   <button
                     onClick={() => setExpandedId(expandedId === basket.id ? null : basket.id)}
-                    className="text-sm text-brand-500 hover:text-brand-600"
+                    className="rounded-md border border-[var(--card-border)] px-3 py-1.5 text-sm text-[var(--muted)] hover:text-white hover:border-white/20"
                   >
                     {expandedId === basket.id ? "Collapse" : "View"}
                   </button>
@@ -282,7 +282,7 @@ export default function BasketsPage() {
                     onClick={() => {
                       if (confirm(`Delete ${basket.name}?`)) deleteMut.mutate(basket.id);
                     }}
-                    className="text-sm text-red-400 hover:text-red-500"
+                    className="rounded-md border border-[var(--card-border)] px-3 py-1.5 text-sm text-red-400 hover:text-red-300 hover:border-red-400/40"
                   >
                     Delete
                   </button>
@@ -291,28 +291,28 @@ export default function BasketsPage() {
 
               {/* Items */}
               {expandedId === basket.id && (
-                <div className="border-t border-[var(--card-border)] px-4 py-3">
-                  <table className="w-full text-sm">
+                <div className="border-t border-[var(--card-border)] px-4 py-3 overflow-x-auto">
+                  <table className="w-full text-sm min-w-[28rem]">
                     <thead className="text-[var(--muted)]">
                       <tr>
-                        <th className="text-left py-1">#</th>
-                        <th className="text-left py-1">Symbol</th>
-                        <th className="text-left py-1">Side</th>
-                        <th className="text-left py-1">Qty</th>
+                        <th className="text-left py-1 pr-2">#</th>
+                        <th className="text-left py-1 pr-2">Symbol</th>
+                        <th className="text-left py-1 pr-2">Side</th>
+                        <th className="text-left py-1 pr-2">Qty</th>
                         <th className="text-left py-1">Type</th>
                       </tr>
                     </thead>
                     <tbody>
                       {basket.items.map((item, idx) => (
                         <tr key={item.id}>
-                          <td className="py-1">{idx + 1}</td>
-                          <td className="py-1 font-medium">
+                          <td className="py-1 pr-2">{idx + 1}</td>
+                          <td className="py-1 pr-2 font-medium whitespace-nowrap">
                             {item.exchange}:{item.tradingsymbol}
                           </td>
-                          <td className={`py-1 ${item.transaction_type === "BUY" ? "text-green-400" : "text-red-400"}`}>
+                          <td className={`py-1 pr-2 ${item.transaction_type === "BUY" ? "text-green-400" : "text-red-400"}`}>
                             {item.transaction_type}
                           </td>
-                          <td className="py-1">{item.quantity}</td>
+                          <td className="py-1 pr-2">{item.quantity}</td>
                           <td className="py-1 text-[var(--muted)]">{item.order_type}</td>
                         </tr>
                       ))}

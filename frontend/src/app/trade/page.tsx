@@ -326,14 +326,14 @@ export default function TradePage() {
       <h1 className="text-2xl font-semibold">Place Trade</h1>
 
       {/* Step breadcrumb + BACK/NEXT */}
-      <div className="flex items-center justify-between gap-4 rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-4 py-3">
-        <div className="flex items-center gap-2 overflow-x-auto text-sm">
+      <div className="flex flex-col gap-3 rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-1 overflow-x-auto text-sm -mx-1 px-1">
           {STEPS.map((s, i) => {
             const active = step === s.key;
             const clickable = s.key !== "review" || !!orderResult;
             const Icon = s.Icon;
             return (
-              <div key={s.key} className="flex items-center gap-2 whitespace-nowrap">
+              <div key={s.key} className="flex items-center gap-1 whitespace-nowrap">
                 <button
                   onClick={() => clickable && setStep(s.key)}
                   disabled={!clickable}
@@ -346,7 +346,7 @@ export default function TradePage() {
                   }`}
                 >
                   <Icon size={16} />
-                  <span>{s.label}</span>
+                  <span className={active ? "" : "hidden sm:inline"}>{s.label}</span>
                 </button>
                 {i < STEPS.length - 1 && (
                   <ChevronRight size={14} className="text-[var(--muted)]/50 shrink-0" />
@@ -382,10 +382,10 @@ export default function TradePage() {
       {/* Quote Panel (persistent across steps 2-4) */}
       {instrument && step !== "instrument" && (
         <div className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-4">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-lg font-semibold">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="text-base sm:text-lg font-semibold truncate">
                   {formatInstrumentDisplay(instrument).display}
                 </span>
                 <span className="rounded bg-white/10 px-1.5 py-0.5 text-[11px] font-medium text-[var(--muted)]">
@@ -965,7 +965,31 @@ export default function TradePage() {
             <span className="text-red-400">Failed: {orderResult.failed}</span>
           </div>
 
-          <div className="overflow-x-auto rounded-lg border border-[var(--card-border)]">
+          {/* Mobile cards */}
+          <div className="space-y-2 lg:hidden">
+            {orderResult.results.map((r, i) => (
+              <div key={i} className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-medium truncate">{r.account_name}</span>
+                  <span
+                    className={`shrink-0 rounded-full px-2 py-0.5 text-xs ${
+                      r.status === "PLACED"
+                        ? "bg-green-500/10 text-green-400"
+                        : "bg-red-500/10 text-red-400"
+                    }`}
+                  >
+                    {r.status}
+                  </span>
+                </div>
+                <div className="mt-1 text-xs text-[var(--muted)] space-y-0.5">
+                  <p>Order ID: <span className="font-mono">{r.kite_order_id || "-"}</span></p>
+                  {r.message && <p className="break-words">{r.message}</p>}
+                </div>
+              </div>
+            ))}
+          </div>
+          {/* Desktop table */}
+          <div className="hidden lg:block overflow-x-auto rounded-lg border border-[var(--card-border)]">
             <table className="w-full text-sm">
               <thead className="bg-[var(--card)] text-left text-[var(--muted)]">
                 <tr>
