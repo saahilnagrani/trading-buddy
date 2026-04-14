@@ -58,9 +58,11 @@ function AccountsContent() {
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
-    // On edit, only include kite_user_id in the payload if the field is unlocked
-    // (otherwise it's read-only and we don't want to accidentally overwrite it).
-    const includeUserId = !editing || userIdUnlocked;
+    // Include kite_user_id when: creating, or editing an account that has no
+    // existing user ID yet, or editing and the user clicked Unlock. For
+    // already-bound accounts the field is read-only until unlocked, so we
+    // don't risk overwriting a correct binding with a stale form value.
+    const includeUserId = !editing || !editing.kite_user_id || userIdUnlocked;
     const payload: AccountCreate = {
       name: form.get("name") as string,
       owner_name: (form.get("owner_name") as string) || undefined,
