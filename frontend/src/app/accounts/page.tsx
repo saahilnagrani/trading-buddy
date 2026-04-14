@@ -217,11 +217,13 @@ function AccountsContent() {
                       >
                         developers.kite.trade <ExternalLink size={10} />
                       </a>
-                      {/*
-                        TODO: Add screenshot at public/screenshots/kite-01-developer-portal.png
-                        Content: The Kite Connect developer portal homepage (https://developers.kite.trade/)
-                        showing the dashboard with existing apps and the "Create new app" button.
-                      */}
+                      {/* Drop file at public/screenshots/kite-01-developer-portal.png to show here */}
+                      <img
+                        src="/screenshots/kite-01-developer-portal.png"
+                        alt="Kite Connect developer portal dashboard showing the Create new app button"
+                        className="mt-2 w-full rounded border border-[var(--card-border)]"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
                     </div>
                   </li>
 
@@ -245,11 +247,13 @@ function AccountsContent() {
                       >
                         Create new app <ExternalLink size={10} />
                       </a>
-                      {/*
-                        TODO: Add screenshot at public/screenshots/kite-02-create-app.png
-                        Content: The "Create new app" form on developers.kite.trade showing the
-                        Name, App type, and Redirect URL fields before submission.
-                      */}
+                      {/* Drop file at public/screenshots/kite-02-create-app.png to show here */}
+                      <img
+                        src="/screenshots/kite-02-create-app.png"
+                        alt="Kite Connect create new app form showing Name, App type, and Redirect URL fields"
+                        className="mt-2 w-full rounded border border-[var(--card-border)]"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
                     </div>
                   </li>
 
@@ -272,11 +276,13 @@ function AccountsContent() {
                       <p className="text-[10px] text-[var(--muted)]/60 leading-relaxed">
                         For production: set <code className="font-mono">NEXT_PUBLIC_API_URL</code> in your frontend environment to your deployed backend URL.
                       </p>
-                      {/*
-                        TODO: Add screenshot at public/screenshots/kite-03-redirect-url.png
-                        Content: The app creation form with the Redirect URL field filled in,
-                        showing exactly where to paste the callback URL.
-                      */}
+                      {/* Drop file at public/screenshots/kite-03-redirect-url.png to show here */}
+                      <img
+                        src="/screenshots/kite-03-redirect-url.png"
+                        alt="Kite Connect app form with the Redirect URL field filled in"
+                        className="mt-2 w-full rounded border border-[var(--card-border)]"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
                     </div>
                   </li>
 
@@ -300,11 +306,13 @@ function AccountsContent() {
                       >
                         My apps <ExternalLink size={10} />
                       </a>
-                      {/*
-                        TODO: Add screenshot at public/screenshots/kite-04-api-credentials.png
-                        Content: The app detail page on developers.kite.trade showing the
-                        API Key and API Secret fields with copy buttons highlighted.
-                      */}
+                      {/* Drop file at public/screenshots/kite-04-api-credentials.png to show here */}
+                      <img
+                        src="/screenshots/kite-04-api-credentials.png"
+                        alt="Kite Connect app detail page showing API Key and API Secret with copy buttons"
+                        className="mt-2 w-full rounded border border-[var(--card-border)]"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
                     </div>
                   </li>
 
@@ -330,11 +338,13 @@ function AccountsContent() {
                       >
                         Kite dashboard <ExternalLink size={10} />
                       </a>
-                      {/*
-                        TODO: Add screenshot at public/screenshots/kite-05-user-id.png
-                        Content: The Kite profile/account page showing the client ID (user ID)
-                        field, typically visible in the top-right menu or profile section.
-                      */}
+                      {/* Drop file at public/screenshots/kite-05-user-id.png to show here */}
+                      <img
+                        src="/screenshots/kite-05-user-id.png"
+                        alt="Kite profile page showing the Zerodha client ID"
+                        className="mt-2 w-full rounded border border-[var(--card-border)]"
+                        onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+                      />
                     </div>
                   </li>
                 </ol>
@@ -502,7 +512,138 @@ function AccountsContent() {
           No accounts yet. Add one to get started.
         </p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-[var(--card-border)]">
+        <>
+        {/* Mobile card list */}
+        <div className="space-y-3 lg:hidden">
+          {accounts.map((account) => (
+            <div
+              key={account.id}
+              className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-4 space-y-3"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-semibold truncate">{account.name}</h3>
+                    <AccountStatusBadge isLoggedIn={account.token_status.is_logged_in} />
+                  </div>
+                  {account.owner_name && (
+                    <p className="text-xs text-[var(--muted)] mt-0.5">{account.owner_name}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    onClick={() => {
+                      setEditing(account);
+                      setUserIdUnlocked(false);
+                      setShowCredentialHelp(false);
+                      setShowForm(true);
+                    }}
+                    title="Edit"
+                    aria-label="Edit account"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-md text-[var(--muted)] hover:text-brand-500 hover:bg-white/5 transition-colors"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (confirm(`Remove ${account.name}?`)) {
+                        deleteMutation.mutate(account.id);
+                      }
+                    }}
+                    title="Remove"
+                    aria-label="Remove account"
+                    className="inline-flex h-10 w-10 items-center justify-center rounded-md text-[var(--muted)] hover:text-red-400 hover:bg-white/5 transition-colors"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                <div>
+                  <p className="text-[var(--muted)]">Kite User ID</p>
+                  <p className="font-mono text-[var(--muted)]">{account.kite_user_id || "-"}</p>
+                </div>
+                <div>
+                  <p className="text-[var(--muted)]">Max Lots</p>
+                  <p>{account.max_lots}</p>
+                </div>
+                <div>
+                  <p className="text-[var(--muted)]">Kite API</p>
+                  <p className={account.has_kite_credentials ? "text-green-400" : "text-red-400"}>
+                    {account.has_kite_credentials ? "Configured" : "Missing"}
+                  </p>
+                </div>
+                {account.token_status.is_logged_in && (
+                  <div>
+                    <p className="text-[var(--muted)]">Session</p>
+                    <p className="text-[10px] leading-tight">
+                      In {formatTime(account.token_status.login_time)}
+                      <br />
+                      Exp {formatTime(account.token_status.expires_at)}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-2 pt-1">
+                {account.has_kite_credentials && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const { login_url } = await getLoginUrl(account.id);
+                        window.open(login_url, "_blank");
+                      } catch {
+                        alert("Failed to generate login URL");
+                      }
+                    }}
+                    className={`flex-1 min-w-[6rem] rounded-md px-3 py-2 text-xs font-medium transition-colors ${
+                      account.token_status.is_logged_in
+                        ? "border border-[var(--card-border)] text-[var(--muted)] hover:text-white hover:border-white/20"
+                        : "bg-green-600 text-white hover:bg-green-700"
+                    }`}
+                  >
+                    {account.token_status.is_logged_in ? "Re-login" : "Login"}
+                  </button>
+                )}
+                {account.token_status.is_logged_in && (
+                  <button
+                    onClick={async () => {
+                      if (
+                        !confirm(
+                          `End the current Kite session for ${account.name}? You'll need to log in again to place orders.`
+                        )
+                      )
+                        return;
+                      try {
+                        await logoutAccount(account.id);
+                        qc.invalidateQueries({ queryKey: ["accounts"] });
+                        setFeedback({
+                          type: "success",
+                          message: `Session ended for ${account.name}`,
+                        });
+                      } catch (err: any) {
+                        setFeedback({
+                          type: "error",
+                          message:
+                            err?.response?.data?.detail ||
+                            err?.message ||
+                            "Failed to end session",
+                        });
+                      }
+                    }}
+                    className="flex-1 min-w-[6rem] rounded-md border border-[var(--card-border)] px-3 py-2 text-xs font-medium text-red-400 hover:text-red-300 hover:border-red-400/40 transition-colors"
+                  >
+                    Logout
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Desktop table */}
+        <div className="hidden lg:block overflow-x-auto rounded-lg border border-[var(--card-border)]">
           <table className="w-full text-sm">
             <thead className="bg-[var(--card)] text-left text-[var(--muted)]">
               <tr>
@@ -626,6 +767,7 @@ function AccountsContent() {
             </tbody>
           </table>
         </div>
+        </>
       )}
     </div>
   );
