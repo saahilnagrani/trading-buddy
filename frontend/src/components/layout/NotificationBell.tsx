@@ -2,10 +2,9 @@
 
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import axios from "axios";
+import { api } from "@/lib/api";
+import { useAuth } from "@/lib/contexts/AuthContext";
 import { formatTime } from "@/lib/utils/formatters";
-
-const api = axios.create({ baseURL: (process.env.NEXT_PUBLIC_API_URL || "") + "/api" });
 
 interface NotifItem {
   id: string;
@@ -18,18 +17,22 @@ interface NotifItem {
 
 export function NotificationBell() {
   const qc = useQueryClient();
+  const { user } = useAuth();
   const [open, setOpen] = useState(false);
 
   const { data: count } = useQuery({
     queryKey: ["notif-count"],
     queryFn: async () => (await api.get<{ count: number }>("/notifications/unread-count")).data.count,
-    refetchInterval: 15_000,
+    refetchInterval: 30_000,
+    enabled: !!user,
+    retry: false,
   });
 
   const { data: notifs } = useQuery({
     queryKey: ["notifs"],
     queryFn: async () => (await api.get<NotifItem[]>("/notifications", { params: { limit: 20 } })).data,
-    enabled: open,
+    enabled: open && !!user,
+    retry: false,
   });
 
   const markAllRead = useMutation({

@@ -2,10 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useAccounts, useUpdateAccount } from "@/lib/hooks/useAccounts";
+import { api } from "@/lib/api";
 import type { Account } from "@/lib/types";
-import axios from "axios";
-
-const api = axios.create({ baseURL: (process.env.NEXT_PUBLIC_API_URL || "") + "/api" });
 
 export default function SettingsPage() {
   const { data: accounts } = useAccounts();

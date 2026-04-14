@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import {
   useAccounts,
   useCreateAccount,
@@ -9,11 +10,23 @@ import {
 } from "@/lib/hooks/useAccounts";
 import { getLoginUrl } from "@/lib/api";
 import { AccountStatusBadge } from "@/components/accounts/AccountStatusBadge";
+import { formatTime } from "@/lib/utils/formatters";
 import { Pencil, Trash2 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Account, AccountCreate } from "@/lib/types";
 
 export default function AccountsPage() {
+  return (
+    <Suspense fallback={<p className="text-[var(--muted)]">Loading...</p>}>
+      <AccountsContent />
+    </Suspense>
+  );
+}
+
+function AccountsContent() {
   const { data: accounts, isLoading } = useAccounts();
+  const searchParams = useSearchParams();
+  const qc = useQueryClient();
   const createMutation = useCreateAccount();
   const updateMutation = useUpdateAccount();
   const deleteMutation = useDeleteAccount();
@@ -21,6 +34,18 @@ export default function AccountsPage() {
   const [editing, setEditing] = useState<Account | null>(null);
   const [showSecret, setShowSecret] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
+
+  // Handle OAuth callback results from ?success=... or ?error=... URL params
+  useEffect(() => {
+    const success = searchParams.get("success");
+    const error = searchParams.get("error");
+    if (success) {
+      setFeedback({ type: "success", message: "Login successful! Token stored." });
+      qc.invalidateQueries({ queryKey: ["accounts"] });
+    } else if (error) {
+      setFeedback({ type: "error", message: `Login failed: ${error.replace(/_/g, " ")}` });
+    }
+  }, [searchParams, qc]);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -224,9 +249,17 @@ export default function AccountsPage() {
                     </span>
                   </td>
                   <td className="px-4 py-3">
-                    <AccountStatusBadge
-                      isLoggedIn={account.token_status.is_logged_in}
-                    />
+                    <div className="space-y-1">
+                      <AccountStatusBadge
+                        isLoggedIn={account.token_status.is_logged_in}
+                      />
+                      {account.token_status.is_logged_in && (
+                        <div className="text-[10px] text-[var(--muted)] leading-tight">
+                          <div>In: {formatTime(account.token_status.login_time)}</div>
+                          <div>Exp: {formatTime(account.token_status.expires_at)}</div>
+                        </div>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">

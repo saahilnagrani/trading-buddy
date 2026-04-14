@@ -63,7 +63,7 @@ async def oauth_callback(
     db: AsyncSession = Depends(get_db),
 ):
     if status != "success":
-        return RedirectResponse(url=f"{settings.frontend_url}/login?error=auth_failed")
+        return RedirectResponse(url=f"{settings.frontend_url}/accounts?error=auth_failed")
 
     # Look up the pending account from the most recent login request
     r = get_redis()
@@ -71,7 +71,7 @@ async def oauth_callback(
     await r.delete("oauth_pending_account")
 
     if not account_id_str:
-        return RedirectResponse(url=f"{settings.frontend_url}/login?error=no_pending_login")
+        return RedirectResponse(url=f"{settings.frontend_url}/accounts?error=no_pending_login")
 
     account_id = uuid.UUID(account_id_str)
 
@@ -79,10 +79,10 @@ async def oauth_callback(
     result = await db.execute(select(Account).where(Account.id == account_id))
     account = result.scalar_one_or_none()
     if not account:
-        return RedirectResponse(url=f"{settings.frontend_url}/login?error=account_not_found")
+        return RedirectResponse(url=f"{settings.frontend_url}/accounts?error=account_not_found")
 
     if not account.kite_api_key or not account.kite_api_secret:
-        return RedirectResponse(url=f"{settings.frontend_url}/login?error=missing_credentials")
+        return RedirectResponse(url=f"{settings.frontend_url}/accounts?error=missing_credentials")
 
     # Exchange request token for access token using per-account credentials
     try:
@@ -92,7 +92,7 @@ async def oauth_callback(
         access_token = session_data["access_token"]
     except Exception as e:
         logger.error(f"Token exchange failed for account {account.name} ({account_id}): {e}")
-        return RedirectResponse(url=f"{settings.frontend_url}/login?error=token_exchange_failed")
+        return RedirectResponse(url=f"{settings.frontend_url}/accounts?error=token_exchange_failed")
 
     # Store encrypted token
     now_ist = datetime.now(IST)
@@ -123,7 +123,7 @@ async def oauth_callback(
     # Initialize KiteConnect instance for this account
     get_kite_client(account_id=account_id, api_key=account.kite_api_key, access_token_encrypted=token.access_token)
 
-    return RedirectResponse(url=f"{settings.frontend_url}/login?success={account_id}")
+    return RedirectResponse(url=f"{settings.frontend_url}/accounts?success={account_id}")
 
 
 @router.get("/status", response_model=AuthStatusResponse)

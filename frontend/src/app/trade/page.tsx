@@ -5,6 +5,7 @@ import { useAccounts } from "@/lib/hooks/useAccounts";
 import { usePlaceOrders } from "@/lib/hooks/useOrders";
 import { searchInstruments, fetchQuote } from "@/lib/api";
 import { AccountStatusBadge } from "@/components/accounts/AccountStatusBadge";
+import { Search, Users, Sliders, CheckCircle2, ChevronRight } from "lucide-react";
 import type {
   InstrumentResult,
   PlaceOrderRequest,
@@ -14,6 +15,13 @@ import type {
 } from "@/lib/types";
 
 type Step = "instrument" | "accounts" | "quantity" | "review";
+
+const STEPS: { key: Step; label: string; Icon: typeof Search }[] = [
+  { key: "instrument", label: "Select instrument", Icon: Search },
+  { key: "accounts", label: "Select accounts", Icon: Users },
+  { key: "quantity", label: "Set quantity & type", Icon: Sliders },
+  { key: "review", label: "Review", Icon: CheckCircle2 },
+];
 
 function formatInstrumentDisplay(r: InstrumentResult) {
   const ts = r.tradingsymbol;
@@ -159,6 +167,29 @@ export default function TradePage() {
     }
   }
 
+  // Can the user advance from the current step?
+  function canGoNext(): boolean {
+    if (step === "instrument") return !!instrument;
+    if (step === "accounts") return selectedAccounts.length > 0;
+    if (step === "quantity") {
+      if (mode === "uniform") return !!uniformQty && parseInt(uniformQty) > 0;
+      return Object.values(customAllocs).some((v) => v && parseInt(v) > 0);
+    }
+    return false;
+  }
+
+  function handleBack() {
+    const idx = STEPS.findIndex((s) => s.key === step);
+    if (idx > 0) setStep(STEPS[idx - 1].key);
+  }
+
+  async function handleNext() {
+    if (!canGoNext()) return;
+    if (step === "instrument") setStep("accounts");
+    else if (step === "accounts") setStep("quantity");
+    else if (step === "quantity") await handlePlaceOrder();
+  }
+
   async function handlePlaceOrder() {
     if (!instrument) return;
 
@@ -195,26 +226,58 @@ export default function TradePage() {
     <div className="space-y-6">
       <h1 className="text-2xl font-semibold">Place Trade</h1>
 
-      {/* Step indicators */}
-      <div className="flex gap-2 text-sm">
-        {(["instrument", "accounts", "quantity", "review"] as Step[]).map(
-          (s, i) => (
+      {/* Step breadcrumb + BACK/NEXT */}
+      <div className="flex items-center justify-between gap-4 rounded-lg border border-[var(--card-border)] bg-[var(--card)] px-4 py-3">
+        <div className="flex items-center gap-2 overflow-x-auto text-sm">
+          {STEPS.map((s, i) => {
+            const active = step === s.key;
+            const clickable = s.key !== "review" || !!orderResult;
+            const Icon = s.Icon;
+            return (
+              <div key={s.key} className="flex items-center gap-2 whitespace-nowrap">
+                <button
+                  onClick={() => clickable && setStep(s.key)}
+                  disabled={!clickable}
+                  className={`flex items-center gap-1.5 rounded-md px-2 py-1 transition-colors ${
+                    active
+                      ? "text-brand-500 font-medium"
+                      : clickable
+                      ? "text-[var(--muted)] hover:text-white"
+                      : "text-[var(--muted)]/50 cursor-not-allowed"
+                  }`}
+                >
+                  <Icon size={16} />
+                  <span>{s.label}</span>
+                </button>
+                {i < STEPS.length - 1 && (
+                  <ChevronRight size={14} className="text-[var(--muted)]/50 shrink-0" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={handleBack}
+            disabled={step === "instrument" || step === "review"}
+            className="rounded-md border border-[var(--card-border)] px-4 py-1.5 text-sm font-medium text-[var(--muted)] hover:text-white hover:border-white/20 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+          >
+            BACK
+          </button>
+          {step !== "review" && (
             <button
-              key={s}
-              onClick={() => {
-                if (s === "review" && !orderResult) return;
-                setStep(s);
-              }}
-              className={`rounded-full px-3 py-1 transition-colors ${
-                step === s
-                  ? "bg-brand-600 text-white"
-                  : "bg-[var(--card)] text-[var(--muted)] hover:text-white"
-              }`}
+              onClick={handleNext}
+              disabled={!canGoNext() || placeOrdersMut.isPending}
+              className="rounded-md bg-brand-600 px-4 py-1.5 text-sm font-medium text-white hover:bg-brand-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              {i + 1}. {s.charAt(0).toUpperCase() + s.slice(1)}
+              {step === "quantity"
+                ? placeOrdersMut.isPending
+                  ? "PLACING..."
+                  : "PLACE ORDER"
+                : "NEXT"}
             </button>
-          )
-        )}
+          )}
+        </div>
       </div>
 
       {/* Quote Panel (persistent across steps 2-4) */}
@@ -389,12 +452,6 @@ export default function TradePage() {
                   Lot size: {instrument.lot_size}
                 </span>
               )}
-              <button
-                onClick={() => setStep("accounts")}
-                className="ml-4 rounded bg-brand-600 px-3 py-1 text-xs text-white hover:bg-brand-700"
-              >
-                Next
-              </button>
             </div>
           )}
         </div>
@@ -447,12 +504,9 @@ export default function TradePage() {
           </div>
 
           {selectedAccounts.length > 0 && (
-            <button
-              onClick={() => setStep("quantity")}
-              className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
-            >
-              Next ({selectedAccounts.length} selected)
-            </button>
+            <p className="text-xs text-[var(--muted)]">
+              {selectedAccounts.length} account{selectedAccounts.length === 1 ? "" : "s"} selected
+            </p>
           )}
         </div>
       )}
@@ -605,13 +659,6 @@ export default function TradePage() {
             </div>
           )}
 
-          <button
-            onClick={handlePlaceOrder}
-            disabled={placeOrdersMut.isPending}
-            className="rounded-md bg-brand-600 px-6 py-2.5 text-sm font-medium text-white hover:bg-brand-700 disabled:opacity-50"
-          >
-            {placeOrdersMut.isPending ? "Placing..." : "Place Order"}
-          </button>
         </div>
       )}
 
