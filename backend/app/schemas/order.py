@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class OrderParams(BaseModel):
-    exchange: str = Field(..., pattern="^(NSE|NFO|BFO|BSE|MCX)$")
+    exchange: str = Field(..., pattern="^(NSE|NFO|BFO|BSE|MCX|CDS|BCD)$")
     tradingsymbol: str = Field(..., max_length=100)
     transaction_type: str = Field(..., pattern="^(BUY|SELL)$")
     order_type: str = Field(..., pattern="^(MARKET|LIMIT|SL|SL-M)$")
@@ -14,6 +14,8 @@ class OrderParams(BaseModel):
     variety: str = Field("regular", pattern="^(regular|amo|iceberg)$")
     price: Decimal | None = None
     trigger_price: Decimal | None = None
+    iceberg_legs: int | None = Field(None, ge=2, le=10)
+    iceberg_quantity: int | None = Field(None, ge=1)
 
 
 class PlaceOrderRequest(BaseModel):

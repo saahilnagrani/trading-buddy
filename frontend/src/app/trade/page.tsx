@@ -23,6 +23,21 @@ const STEPS: { key: Step; label: string; Icon: typeof Search }[] = [
   { key: "review", label: "Review", Icon: CheckCircle2 },
 ];
 
+// Valid products per exchange per Kite API docs
+// NSE/BSE equity: CNC (delivery), MIS (intraday)
+// NFO/BFO derivatives, MCX commodity, CDS/BCD currency: NRML (carry-forward), MIS (intraday)
+function getValidProducts(exchange: string): ("NRML" | "MIS" | "CNC")[] {
+  if (exchange === "NSE" || exchange === "BSE") return ["CNC", "MIS"];
+  if (exchange === "NFO" || exchange === "BFO" || exchange === "MCX" || exchange === "CDS" || exchange === "BCD")
+    return ["NRML", "MIS"];
+  return ["NRML", "MIS", "CNC"];
+}
+
+// Iceberg is only supported on NSE/BSE equity and NFO/BFO F&O in Kite
+function isIcebergSupported(exchange: string): boolean {
+  return ["NSE", "BSE", "NFO", "BFO"].includes(exchange);
+}
+
 function formatInstrumentDisplay(r: InstrumentResult) {
   const ts = r.tradingsymbol;
   const name = r.name || "";
@@ -83,14 +98,19 @@ export default function TradePage() {
   const [searching, setSearching] = useState(false);
   const [selectedAccounts, setSelectedAccounts] = useState<string[]>([]);
   const [txnType, setTxnType] = useState<"BUY" | "SELL">("BUY");
-  const [orderType, setOrderType] = useState<"MARKET" | "LIMIT">("LIMIT");
+  const [orderType, setOrderType] = useState<"MARKET" | "LIMIT" | "SL" | "SL-M">("LIMIT");
   const [product, setProduct] = useState<"NRML" | "MIS" | "CNC">("NRML");
+  const [variety, setVariety] = useState<"regular" | "amo" | "iceberg">("regular");
+  const [icebergLegs, setIcebergLegs] = useState("");
+  const [icebergQty, setIcebergQty] = useState("");
   const [price, setPrice] = useState("");
+  const [triggerPrice, setTriggerPrice] = useState("");
   const [mode, setMode] = useState<"uniform" | "custom">("uniform");
   const [uniformQty, setUniformQty] = useState("");
   const [customAllocs, setCustomAllocs] = useState<Record<string, string>>({});
   const [orderResult, setOrderResult] = useState<PlaceOrderResponse | null>(null);
   const [quote, setQuote] = useState<QuoteData | null>(null);
+  const [quoteError, setQuoteError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>();
   const abortRef = useRef<AbortController>();
 
@@ -123,10 +143,24 @@ export default function TradePage() {
     }, 500);
   }, [searchQuery]);
 
+  // Auto-correct product + variety when the instrument's exchange changes
+  useEffect(() => {
+    if (!instrument) return;
+    const valid = getValidProducts(instrument.exchange);
+    if (!valid.includes(product)) {
+      setProduct(valid[0]);
+    }
+    if (variety === "iceberg" && !isIcebergSupported(instrument.exchange)) {
+      setVariety("regular");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [instrument]);
+
   // Poll quote data every 3s when an instrument is selected
   useEffect(() => {
     if (!instrument) {
       setQuote(null);
+      setQuoteError(null);
       return;
     }
     let cancelled = false;
@@ -135,9 +169,20 @@ export default function TradePage() {
     async function poll() {
       try {
         const data = await fetchQuote(symbol);
-        if (!cancelled) setQuote(data);
-      } catch {
-        // silently ignore (market closed, no account logged in, etc.)
+        if (!cancelled) {
+          setQuote(data);
+          setQuoteError(null);
+        }
+      } catch (e: any) {
+        if (!cancelled) {
+          const detail =
+            e?.response?.data?.detail ||
+            e?.message ||
+            "Unable to fetch quote";
+          setQuoteError(
+            typeof detail === "string" ? detail : "Unable to fetch quote"
+          );
+        }
       }
     }
 
@@ -167,6 +212,36 @@ export default function TradePage() {
     }
   }
 
+  // Compute effective per-account quantity for the uniform mode, capped at each account's max_lots.
+  // Returns null if no capping is happening (i.e., every selected account can take the full uniform qty).
+  function getUniformCapPreview(): {
+    capped: { accountId: string; name: string; requested: number; allowed: number }[];
+    effectiveAllocations: Record<string, number>;
+  } | null {
+    if (!instrument || mode !== "uniform") return null;
+    const lotSize = instrument.lot_size || 1;
+    const reqQty = parseInt(uniformQty);
+    if (!reqQty || reqQty <= 0) return null;
+    const effective: Record<string, number> = {};
+    const capped: { accountId: string; name: string; requested: number; allowed: number }[] = [];
+    for (const aid of selectedAccounts) {
+      const acc = accounts?.find((a) => a.id === aid);
+      if (!acc) continue;
+      const maxQty = acc.max_lots * lotSize;
+      const alloc = Math.min(reqQty, maxQty);
+      effective[aid] = alloc;
+      if (alloc < reqQty) {
+        capped.push({
+          accountId: aid,
+          name: acc.name,
+          requested: reqQty,
+          allowed: alloc,
+        });
+      }
+    }
+    return { capped, effectiveAllocations: effective };
+  }
+
   // Can the user advance from the current step?
   function canGoNext(): boolean {
     if (step === "instrument") return !!instrument;
@@ -193,24 +268,48 @@ export default function TradePage() {
   async function handlePlaceOrder() {
     if (!instrument) return;
 
+    // In uniform mode, if any selected account's max_lots would be exceeded,
+    // automatically switch to custom_allocations with per-account caps so the
+    // bigger accounts get the full qty and the smaller ones get their max.
+    const cap = getUniformCapPreview();
+    const mustCap = cap && cap.capped.length > 0;
+
     const req: PlaceOrderRequest = {
       account_ids: selectedAccounts,
-      mode,
+      mode: mustCap ? "custom" : mode,
       order: {
         exchange: instrument.exchange,
         tradingsymbol: instrument.tradingsymbol,
         transaction_type: txnType,
         order_type: orderType,
         product,
-        price: orderType === "LIMIT" ? parseFloat(price) : undefined,
+        variety,
+        price:
+          orderType === "LIMIT" || orderType === "SL"
+            ? parseFloat(price)
+            : undefined,
+        trigger_price:
+          orderType === "SL" || orderType === "SL-M"
+            ? parseFloat(triggerPrice)
+            : undefined,
+        iceberg_legs:
+          variety === "iceberg" && icebergLegs
+            ? parseInt(icebergLegs)
+            : undefined,
+        iceberg_quantity:
+          variety === "iceberg" && icebergQty
+            ? parseInt(icebergQty)
+            : undefined,
       },
-      uniform_quantity: mode === "uniform" ? parseInt(uniformQty) : undefined,
-      custom_allocations:
-        mode === "custom"
-          ? Object.fromEntries(
-              Object.entries(customAllocs).map(([k, v]) => [k, parseInt(v)])
-            )
-          : undefined,
+      uniform_quantity:
+        mode === "uniform" && !mustCap ? parseInt(uniformQty) : undefined,
+      custom_allocations: mustCap
+        ? cap!.effectiveAllocations
+        : mode === "custom"
+        ? Object.fromEntries(
+            Object.entries(customAllocs).map(([k, v]) => [k, parseInt(v)])
+          )
+        : undefined,
     };
 
     try {
@@ -367,6 +466,10 @@ export default function TradePage() {
                     )}
                   </div>
                 </div>
+              ) : quoteError ? (
+                <p className="mt-2 text-xs text-yellow-400">
+                  Quote unavailable: {quoteError}
+                </p>
               ) : (
                 <p className="mt-2 text-sm text-[var(--muted)]">
                   Loading quote...
@@ -379,6 +482,7 @@ export default function TradePage() {
                 setInstrument(null);
                 setSearchQuery("");
                 setQuote(null);
+                setQuoteError(null);
               }}
               className="shrink-0 text-xs text-[var(--muted)] hover:text-white"
             >
@@ -562,26 +666,99 @@ export default function TradePage() {
                 onChange={(e) => setProduct(e.target.value as any)}
                 className="w-full rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 text-sm"
               >
-                <option value="NRML">NRML</option>
-                <option value="MIS">MIS</option>
-                <option value="CNC">CNC</option>
+                {getValidProducts(instrument.exchange).map((p) => (
+                  <option key={p} value={p}>
+                    {p}
+                  </option>
+                ))}
               </select>
             </div>
-            {orderType === "LIMIT" && (
+            <div>
+              <label className="block text-sm text-[var(--muted)] mb-1">
+                Variety
+              </label>
+              <select
+                value={variety}
+                onChange={(e) => setVariety(e.target.value as any)}
+                className="w-full rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 text-sm"
+              >
+                <option value="regular">Regular</option>
+                <option value="amo">AMO (After Market)</option>
+                {isIcebergSupported(instrument.exchange) && (
+                  <option value="iceberg">Iceberg</option>
+                )}
+              </select>
+            </div>
+          </div>
+
+          {/* Price inputs — separate row since they're conditional */}
+          {(orderType === "LIMIT" || orderType === "SL" || orderType === "SL-M") && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 max-w-md">
+              {(orderType === "LIMIT" || orderType === "SL") && (
+                <div>
+                  <label className="block text-sm text-[var(--muted)] mb-1">
+                    Price
+                  </label>
+                  <input
+                    type="number"
+                    step={instrument.tick_size}
+                    value={price}
+                    onChange={(e) => setPrice(e.target.value)}
+                    className="w-full rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 text-sm"
+                  />
+                </div>
+              )}
+              {(orderType === "SL" || orderType === "SL-M") && (
+                <div>
+                  <label className="block text-sm text-[var(--muted)] mb-1">
+                    Trigger Price
+                  </label>
+                  <input
+                    type="number"
+                    step={instrument.tick_size}
+                    value={triggerPrice}
+                    onChange={(e) => setTriggerPrice(e.target.value)}
+                    className="w-full rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 text-sm"
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Iceberg params */}
+          {variety === "iceberg" && (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 max-w-md">
               <div>
                 <label className="block text-sm text-[var(--muted)] mb-1">
-                  Price
+                  Iceberg Legs (2–10)
                 </label>
                 <input
                   type="number"
-                  step={instrument.tick_size}
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
+                  min={2}
+                  max={10}
+                  step={1}
+                  value={icebergLegs}
+                  onChange={(e) => setIcebergLegs(e.target.value)}
+                  placeholder="e.g., 5"
                   className="w-full rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 text-sm"
                 />
               </div>
-            )}
-          </div>
+              <div>
+                <label className="block text-sm text-[var(--muted)] mb-1">
+                  Disclosed Qty per Leg
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  step={instrument.lot_size || 1}
+                  value={icebergQty}
+                  onChange={(e) => setIcebergQty(e.target.value)}
+                  placeholder={`Multiple of ${instrument.lot_size}`}
+                  className="w-full rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+          )}
 
           {/* Mode toggle */}
           <div>
@@ -606,58 +783,174 @@ export default function TradePage() {
           </div>
 
           {/* Quantity input */}
-          {mode === "uniform" ? (
-            <div>
-              <label className="block text-sm text-[var(--muted)] mb-1">
-                Quantity (per account)
-              </label>
-              <input
-                type="number"
-                min={1}
-                step={instrument.lot_size || 1}
-                value={uniformQty}
-                onChange={(e) => setUniformQty(e.target.value)}
-                placeholder={`Lot size: ${instrument.lot_size}`}
-                className="w-full max-w-xs rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 text-sm"
-              />
-            </div>
-          ) : (
-            <div className="space-y-2">
-              <p className="text-sm text-[var(--muted)]">
-                Set quantity per account:
-              </p>
-              {selectedAccounts.map((aid) => {
-                const account = accounts?.find((a) => a.id === aid);
-                return (
-                  <div
-                    key={aid}
-                    className="flex items-center gap-3 rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-3"
-                  >
-                    <span className="flex-1 text-sm font-medium">
-                      {account?.name}
-                    </span>
-                    <span className="text-xs text-[var(--muted)]">
-                      Max: {account?.max_lots} lots
-                    </span>
-                    <input
-                      type="number"
-                      min={1}
-                      step={instrument.lot_size || 1}
-                      value={customAllocs[aid] || ""}
-                      onChange={(e) =>
-                        setCustomAllocs((prev) => ({
-                          ...prev,
-                          [aid]: e.target.value,
-                        }))
-                      }
-                      placeholder="Qty"
-                      className="w-24 rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-1.5 text-sm"
-                    />
-                  </div>
-                );
-              })}
-            </div>
-          )}
+          {(() => {
+            const lotSize = instrument.lot_size || 1;
+            const quickLots = [1, 2, 3, 5, 10];
+            return mode === "uniform" ? (
+              <div>
+                <div className="flex items-baseline justify-between max-w-xs mb-1">
+                  <label className="text-sm text-[var(--muted)]">
+                    Quantity (per account)
+                  </label>
+                  <span className="text-xs text-[var(--muted)]">
+                    Lot size: {lotSize}
+                    {uniformQty && parseInt(uniformQty) > 0 && lotSize > 0 && (
+                      <>
+                        {" · "}
+                        {(parseInt(uniformQty) / lotSize).toFixed(
+                          parseInt(uniformQty) % lotSize === 0 ? 0 : 2
+                        )}{" "}
+                        lot{parseInt(uniformQty) === lotSize ? "" : "s"}
+                      </>
+                    )}
+                  </span>
+                </div>
+                <input
+                  type="number"
+                  min={1}
+                  step={lotSize}
+                  value={uniformQty}
+                  onChange={(e) => setUniformQty(e.target.value)}
+                  placeholder={`e.g., ${lotSize}`}
+                  className="w-full max-w-xs rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 text-sm"
+                />
+                <div className="mt-2 flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-[var(--muted)]">Quick:</span>
+                  {quickLots.map((n) => {
+                    const qty = lotSize * n;
+                    const active = parseInt(uniformQty) === qty;
+                    return (
+                      <button
+                        key={n}
+                        onClick={() => setUniformQty(String(qty))}
+                        className={`rounded-md px-2.5 py-1 text-xs font-medium transition-colors ${
+                          active
+                            ? "bg-brand-600 text-white"
+                            : "border border-[var(--card-border)] text-[var(--muted)] hover:text-white hover:border-white/20"
+                        }`}
+                      >
+                        {n}L
+                      </button>
+                    );
+                  })}
+                </div>
+                {(() => {
+                  const cap = getUniformCapPreview();
+                  if (!cap || cap.capped.length === 0) return null;
+                  return (
+                    <div className="mt-3 rounded-lg border border-yellow-500/30 bg-yellow-500/5 p-3 text-xs">
+                      <p className="font-medium text-yellow-400 mb-1">
+                        Some accounts will receive a smaller quantity (max lots limit):
+                      </p>
+                      <ul className="space-y-0.5 text-[var(--muted)]">
+                        {cap.capped.map((c) => (
+                          <li key={c.accountId}>
+                            <span className="font-medium text-white">{c.name}</span>
+                            : requested {c.requested} → sending {c.allowed}
+                            {" "}({(c.allowed / lotSize).toFixed(
+                              c.allowed % lotSize === 0 ? 0 : 2
+                            )} lot
+                            {c.allowed === lotSize ? "" : "s"})
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-sm text-[var(--muted)]">
+                  Set quantity per account (lot size: {lotSize}):
+                </p>
+                {selectedAccounts.map((aid) => {
+                  const account = accounts?.find((a) => a.id === aid);
+                  const current = customAllocs[aid] || "";
+                  const currentQty = parseInt(current) || 0;
+                  const maxLots = account?.max_lots || 999;
+                  return (
+                    <div
+                      key={aid}
+                      className="rounded-lg border border-[var(--card-border)] bg-[var(--card)] p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <span className="flex-1 text-sm font-medium">
+                          {account?.name}
+                        </span>
+                        <span className="text-xs text-[var(--muted)]">
+                          Max: {maxLots} lots
+                        </span>
+                        <input
+                          type="number"
+                          min={1}
+                          step={lotSize}
+                          value={current}
+                          onChange={(e) =>
+                            setCustomAllocs((prev) => ({
+                              ...prev,
+                              [aid]: e.target.value,
+                            }))
+                          }
+                          placeholder="Qty"
+                          className="w-24 rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-1.5 text-sm"
+                        />
+                      </div>
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        <span className="text-[11px] text-[var(--muted)]">
+                          {currentQty > 0 && lotSize > 0
+                            ? `${(currentQty / lotSize).toFixed(
+                                currentQty % lotSize === 0 ? 0 : 2
+                              )} lot${currentQty === lotSize ? "" : "s"}`
+                            : "Quick:"}
+                        </span>
+                        {quickLots
+                          .filter((n) => n <= maxLots)
+                          .map((n) => {
+                            const qty = lotSize * n;
+                            const active = currentQty === qty;
+                            return (
+                              <button
+                                key={n}
+                                onClick={() =>
+                                  setCustomAllocs((prev) => ({
+                                    ...prev,
+                                    [aid]: String(qty),
+                                  }))
+                                }
+                                className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                                  active
+                                    ? "bg-brand-600 text-white"
+                                    : "border border-[var(--card-border)] text-[var(--muted)] hover:text-white hover:border-white/20"
+                                }`}
+                              >
+                                {n}L
+                              </button>
+                            );
+                          })}
+                        {maxLots < 999 && maxLots > 0 && !quickLots.includes(maxLots) && (
+                          <button
+                            onClick={() =>
+                              setCustomAllocs((prev) => ({
+                                ...prev,
+                                [aid]: String(lotSize * maxLots),
+                              }))
+                            }
+                            className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition-colors ${
+                              currentQty === lotSize * maxLots
+                                ? "bg-brand-600 text-white"
+                                : "border border-[var(--card-border)] text-[var(--muted)] hover:text-white hover:border-white/20"
+                            }`}
+                          >
+                            Max ({maxLots}L)
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
 
         </div>
       )}
@@ -718,10 +1011,15 @@ export default function TradePage() {
               setInstrument(null);
               setSearchQuery("");
               setQuote(null);
+              setQuoteError(null);
               setSelectedAccounts([]);
               setUniformQty("");
               setCustomAllocs({});
               setPrice("");
+              setTriggerPrice("");
+              setVariety("regular");
+              setIcebergLegs("");
+              setIcebergQty("");
             }}
             className="rounded-md border border-[var(--card-border)] px-4 py-2 text-sm text-[var(--muted)] hover:text-white"
           >

@@ -44,6 +44,7 @@ def _account_to_response(account: Account) -> AccountResponse:
         name=account.name,
         owner_name=account.owner_name,
         has_kite_credentials=bool(account.kite_api_key and account.kite_api_secret),
+        kite_user_id=account.kite_user_id,
         is_active=account.is_active,
         max_lots=account.max_lots,
         max_order_value=float(account.max_order_value) if account.max_order_value else None,
@@ -87,6 +88,7 @@ async def create_account(data: AccountCreate, db: AsyncSession = Depends(get_db)
         owner_name=data.owner_name,
         kite_api_key=data.kite_api_key,
         kite_api_secret=encrypt_token(data.kite_api_secret) if data.kite_api_secret else None,
+        kite_user_id=(data.kite_user_id or None),
         max_lots=data.max_lots,
     )
     db.add(account)
@@ -118,6 +120,9 @@ async def update_account(account_id: uuid.UUID, data: AccountUpdate, db: AsyncSe
                 update_data["kite_api_secret"] = encrypt_token(update_data["kite_api_secret"])
             else:
                 del update_data["kite_api_secret"]
+        # Normalise empty kite_user_id to None so the unlock-and-clear flow works
+        if "kite_user_id" in update_data and not update_data["kite_user_id"]:
+            update_data["kite_user_id"] = None
         for key, value in update_data.items():
             setattr(account, key, value)
 

@@ -135,6 +135,15 @@ export async function getAuthStatus(): Promise<AuthStatus[]> {
   return data.accounts;
 }
 
+export async function logoutAccount(
+  accountId: string
+): Promise<{ status: string; message: string }> {
+  const { data } = await api.post<{ status: string; message: string }>(
+    `/auth/logout/${accountId}`
+  );
+  return data;
+}
+
 // === Orders ===
 
 export async function placeOrders(

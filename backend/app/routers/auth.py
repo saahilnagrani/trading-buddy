@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import uuid
 from datetime import datetime, timedelta, timezone, time
@@ -15,7 +16,7 @@ from app.database import get_db
 from app.models.account import Account, AccountToken
 from app.redis import get_redis
 from app.schemas.account import AuthStatusResponse, LoginUrlResponse
-from app.services.kite_service import get_kite_client
+from app.services.kite_service import get_kite_client, remove_kite_client
 from app.services.token_manager import encrypt_token, decrypt_token
 
 router = APIRouter()
@@ -90,9 +91,30 @@ async def oauth_callback(
         api_secret = decrypt_token(account.kite_api_secret)
         session_data = kite.generate_session(request_token, api_secret=api_secret)
         access_token = session_data["access_token"]
+        kite_user_id = session_data.get("user_id")
     except Exception as e:
         logger.error(f"Token exchange failed for account {account.name} ({account_id}): {e}")
         return RedirectResponse(url=f"{settings.frontend_url}/accounts?error=token_exchange_failed")
+
+    # Kite User ID binding:
+    # - If the account has a manually-configured kite_user_id, the incoming token's user_id MUST match.
+    #   Otherwise reject the login to prevent storing the wrong Kite user's token on this internal account.
+    # - If the account's kite_user_id is unset, auto-fill it from Kite's response (trust on first login).
+    if kite_user_id and account.kite_user_id and account.kite_user_id != kite_user_id:
+        logger.warning(
+            f"Kite User ID mismatch for account {account.name} ({account_id}): "
+            f"expected {account.kite_user_id}, got {kite_user_id}"
+        )
+        return RedirectResponse(
+            url=(
+                f"{settings.frontend_url}/accounts"
+                f"?error=user_id_mismatch"
+                f"&expected={account.kite_user_id}"
+                f"&actual={kite_user_id}"
+            )
+        )
+    if kite_user_id and not account.kite_user_id:
+        account.kite_user_id = kite_user_id
 
     # Store encrypted token
     now_ist = datetime.now(IST)
@@ -124,6 +146,52 @@ async def oauth_callback(
     get_kite_client(account_id=account_id, api_key=account.kite_api_key, access_token_encrypted=token.access_token)
 
     return RedirectResponse(url=f"{settings.frontend_url}/accounts?success={account_id}")
+
+
+@router.post("/logout/{account_id}")
+async def logout_account(account_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+    """End the current Kite session for this account and invalidate the stored token."""
+    now = datetime.now(timezone.utc)
+    result = await db.execute(
+        select(Account)
+        .options(selectinload(Account.tokens))
+        .where(Account.id == account_id, Account.is_active.is_(True))
+    )
+    account = result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Account not found")
+
+    valid_token = next(
+        (t for t in account.tokens if t.is_valid and t.expires_at > now), None
+    )
+    if not valid_token:
+        # Already logged out; nothing to do on Kite's side but clean up any stale flags
+        for t in account.tokens:
+            if t.is_valid:
+                t.is_valid = False
+        await db.commit()
+        remove_kite_client(account_id)
+        return {"status": "logged_out", "message": "No active session to end"}
+
+    # Best-effort: tell Kite to invalidate this access token
+    try:
+        if account.kite_api_key:
+            access_token = decrypt_token(valid_token.access_token)
+            bare_kite = get_kite_client(account_id=account_id, api_key=account.kite_api_key)
+            loop = asyncio.get_event_loop()
+            await loop.run_in_executor(
+                None, lambda: bare_kite.invalidate_access_token(access_token=access_token)
+            )
+    except Exception as e:
+        # If Kite rejects the invalidation (already expired, network, etc.), log and continue.
+        logger.warning(f"Kite invalidate_access_token failed for {account.name}: {e}")
+
+    # Always drop local state regardless of what Kite said
+    valid_token.is_valid = False
+    await db.commit()
+    remove_kite_client(account_id)
+
+    return {"status": "logged_out", "message": f"Session ended for {account.name}"}
 
 
 @router.get("/status", response_model=AuthStatusResponse)

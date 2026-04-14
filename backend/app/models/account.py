@@ -19,6 +19,7 @@ class Account(Base):
     owner_name: Mapped[str | None] = mapped_column(String(100))
     kite_api_key: Mapped[str | None] = mapped_column(String(100))
     kite_api_secret: Mapped[str | None] = mapped_column(String(512))  # Encrypted
+    kite_user_id: Mapped[str | None] = mapped_column(String(20))  # Zerodha user ID (e.g., ZA1234), captured on login
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     max_lots: Mapped[int] = mapped_column(Integer, default=1)
     max_order_value: Mapped[Decimal | None] = mapped_column(Numeric(14, 2))

@@ -11,6 +11,7 @@ export interface Account {
   name: string;
   owner_name: string | null;
   has_kite_credentials: boolean;
+  kite_user_id: string | null;
   is_active: boolean;
   max_lots: number;
   token_status: TokenStatus;
@@ -23,6 +24,7 @@ export interface AccountCreate {
   owner_name?: string;
   kite_api_key?: string;
   kite_api_secret?: string;
+  kite_user_id?: string;
   max_lots: number;
 }
 
@@ -31,6 +33,7 @@ export interface AccountUpdate {
   owner_name?: string;
   kite_api_key?: string;
   kite_api_secret?: string;
+  kite_user_id?: string;
   is_active?: boolean;
   max_lots?: number;
 }
@@ -56,9 +59,11 @@ export interface OrderParams {
   transaction_type: "BUY" | "SELL";
   order_type: "MARKET" | "LIMIT" | "SL" | "SL-M";
   product: "NRML" | "MIS" | "CNC";
-  variety?: string;
+  variety?: "regular" | "amo" | "iceberg";
   price?: number;
   trigger_price?: number;
+  iceberg_legs?: number;
+  iceberg_quantity?: number;
 }
 
 export interface PlaceOrderRequest {

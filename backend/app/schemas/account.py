@@ -9,6 +9,7 @@ class AccountCreate(BaseModel):
     owner_name: str | None = Field(None, max_length=100)
     kite_api_key: str | None = Field(None, max_length=100)
     kite_api_secret: str | None = Field(None, max_length=200)
+    kite_user_id: str | None = Field(None, max_length=20)
     max_lots: int = Field(1, ge=1)
 
 
@@ -17,6 +18,7 @@ class AccountUpdate(BaseModel):
     owner_name: str | None = Field(None, max_length=100)
     kite_api_key: str | None = Field(None, max_length=100)
     kite_api_secret: str | None = Field(None, max_length=200)
+    kite_user_id: str | None = Field(None, max_length=20)
     is_active: bool | None = None
     max_lots: int | None = Field(None, ge=1)
     max_order_value: float | None = None
@@ -37,6 +39,7 @@ class AccountResponse(BaseModel):
     name: str
     owner_name: str | None
     has_kite_credentials: bool = False
+    kite_user_id: str | None = None
     is_active: bool
     max_lots: int
     max_order_value: float | None = None

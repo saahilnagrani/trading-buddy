@@ -99,6 +99,11 @@ async def _place_single_order(
                     kite_params["price"] = float(order_params["price"])
                 if order_params.get("trigger_price"):
                     kite_params["trigger_price"] = float(order_params["trigger_price"])
+                if order_params.get("variety") == "iceberg":
+                    if order_params.get("iceberg_legs"):
+                        kite_params["iceberg_legs"] = int(order_params["iceberg_legs"])
+                    if order_params.get("iceberg_quantity"):
+                        kite_params["iceberg_quantity"] = int(order_params["iceberg_quantity"])
 
                 loop = asyncio.get_event_loop()
                 kite_order_id = await loop.run_in_executor(

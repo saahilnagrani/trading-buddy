@@ -8,7 +8,7 @@ import {
   useUpdateAccount,
   useDeleteAccount,
 } from "@/lib/hooks/useAccounts";
-import { getLoginUrl } from "@/lib/api";
+import { getLoginUrl, logoutAccount } from "@/lib/api";
 import { AccountStatusBadge } from "@/components/accounts/AccountStatusBadge";
 import { formatTime } from "@/lib/utils/formatters";
 import { Pencil, Trash2 } from "lucide-react";
@@ -33,6 +33,7 @@ function AccountsContent() {
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState<Account | null>(null);
   const [showSecret, setShowSecret] = useState(false);
+  const [userIdUnlocked, setUserIdUnlocked] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   // Handle OAuth callback results from ?success=... or ?error=... URL params
@@ -42,6 +43,13 @@ function AccountsContent() {
     if (success) {
       setFeedback({ type: "success", message: "Login successful! Token stored." });
       qc.invalidateQueries({ queryKey: ["accounts"] });
+    } else if (error === "user_id_mismatch") {
+      const expected = searchParams.get("expected") || "?";
+      const actual = searchParams.get("actual") || "?";
+      setFeedback({
+        type: "error",
+        message: `Login rejected: this account is locked to Kite user ${expected}, but you logged in as ${actual}. Log in with the correct Zerodha account, or edit the account and unlock the Kite User ID to fix a typo.`,
+      });
     } else if (error) {
       setFeedback({ type: "error", message: `Login failed: ${error.replace(/_/g, " ")}` });
     }
@@ -50,11 +58,17 @@ function AccountsContent() {
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = new FormData(e.currentTarget);
+    // On edit, only include kite_user_id in the payload if the field is unlocked
+    // (otherwise it's read-only and we don't want to accidentally overwrite it).
+    const includeUserId = !editing || userIdUnlocked;
     const payload: AccountCreate = {
       name: form.get("name") as string,
       owner_name: (form.get("owner_name") as string) || undefined,
       kite_api_key: (form.get("kite_api_key") as string) || undefined,
       kite_api_secret: (form.get("kite_api_secret") as string) || undefined,
+      kite_user_id: includeUserId
+        ? ((form.get("kite_user_id") as string) || undefined)
+        : undefined,
       max_lots: parseInt(form.get("max_lots") as string) || 1,
     };
 
@@ -94,6 +108,7 @@ function AccountsContent() {
           onClick={() => {
             setEditing(null);
             setShowSecret(false);
+            setUserIdUnlocked(false);
             setShowForm(true);
           }}
           className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700 transition-colors"
@@ -189,6 +204,53 @@ function AccountsContent() {
               </div>
             </div>
           </div>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="block text-sm text-[var(--muted)]">
+                  Kite User ID
+                  {editing && editing.kite_user_id && !userIdUnlocked && (
+                    <span className="ml-2 text-[10px] uppercase tracking-wide text-[var(--muted)]/70">
+                      locked
+                    </span>
+                  )}
+                </label>
+                {editing && editing.kite_user_id && !userIdUnlocked && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        confirm(
+                          "Unlocking allows you to change the Kite User ID for this account. Only do this if you entered the wrong ID by mistake. Proceed?"
+                        )
+                      ) {
+                        setUserIdUnlocked(true);
+                      }
+                    }}
+                    className="text-[11px] text-yellow-400 hover:text-yellow-300"
+                  >
+                    Unlock
+                  </button>
+                )}
+              </div>
+              <input
+                name="kite_user_id"
+                readOnly={!!(editing && editing.kite_user_id && !userIdUnlocked)}
+                defaultValue={editing?.kite_user_id ?? ""}
+                className={`w-full rounded-md border border-[var(--card-border)] bg-[var(--background)] px-3 py-2 text-sm font-mono ${
+                  editing && editing.kite_user_id && !userIdUnlocked
+                    ? "opacity-60 cursor-not-allowed"
+                    : ""
+                }`}
+                placeholder="e.g., AB1234 (optional, auto-filled on first login)"
+              />
+              <p className="mt-1 text-[10px] text-[var(--muted)]">
+                Binds this account to a specific Zerodha user. Login is
+                rejected if the Kite account that authenticates does not
+                match.
+              </p>
+            </div>
+          </div>
           <div className="flex gap-2">
             <button
               type="submit"
@@ -229,6 +291,7 @@ function AccountsContent() {
               <tr>
                 <th className="px-4 py-3 font-medium">Name</th>
                 <th className="px-4 py-3 font-medium">Owner</th>
+                <th className="px-4 py-3 font-medium">Kite User ID</th>
                 <th className="px-4 py-3 font-medium">Max Lots</th>
                 <th className="px-4 py-3 font-medium">Kite API</th>
                 <th className="px-4 py-3 font-medium">Status</th>
@@ -241,6 +304,9 @@ function AccountsContent() {
                   <td className="px-4 py-3 font-medium">{account.name}</td>
                   <td className="px-4 py-3 text-[var(--muted)]">
                     {account.owner_name || "-"}
+                  </td>
+                  <td className="px-4 py-3 font-mono text-xs text-[var(--muted)]">
+                    {account.kite_user_id || "-"}
                   </td>
                   <td className="px-4 py-3">{account.max_lots}</td>
                   <td className="px-4 py-3">
@@ -282,9 +348,41 @@ function AccountsContent() {
                           {account.token_status.is_logged_in ? "Re-login" : "Login"}
                         </button>
                       )}
+                      {account.token_status.is_logged_in && (
+                        <button
+                          onClick={async () => {
+                            if (
+                              !confirm(
+                                `End the current Kite session for ${account.name}? You'll need to log in again to place orders.`
+                              )
+                            )
+                              return;
+                            try {
+                              await logoutAccount(account.id);
+                              qc.invalidateQueries({ queryKey: ["accounts"] });
+                              setFeedback({
+                                type: "success",
+                                message: `Session ended for ${account.name}`,
+                              });
+                            } catch (err: any) {
+                              setFeedback({
+                                type: "error",
+                                message:
+                                  err?.response?.data?.detail ||
+                                  err?.message ||
+                                  "Failed to end session",
+                              });
+                            }
+                          }}
+                          className="rounded-md border border-[var(--card-border)] px-3 py-1.5 text-xs font-medium text-red-400 hover:text-red-300 hover:border-red-400/40 transition-colors"
+                        >
+                          Logout
+                        </button>
+                      )}
                       <button
                         onClick={() => {
                           setEditing(account);
+                          setUserIdUnlocked(false);
                           setShowForm(true);
                         }}
                         title="Edit"
