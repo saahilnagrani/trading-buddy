@@ -8,6 +8,8 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.account import Account
 from app.models.basket import Basket, BasketItem
+from app.models.user import User
+from app.routers.users import get_current_user
 from app.schemas.basket import (
     BasketCreate,
     BasketUpdate,
@@ -111,12 +113,25 @@ async def execute_basket_endpoint(
     basket_id: uuid.UUID,
     req: BasketExecuteRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     if req.account_ids == ["all"]:
-        result = await db.execute(select(Account.id).where(Account.is_active.is_(True)))
+        result = await db.execute(
+            select(Account.id).where(Account.is_active.is_(True), Account.user_id == current_user.id)
+        )
         account_ids = [row[0] for row in result.all()]
     else:
-        account_ids = [uuid.UUID(aid) for aid in req.account_ids]
+        requested_ids = [uuid.UUID(aid) for aid in req.account_ids]
+        result = await db.execute(
+            select(Account.id).where(
+                Account.id.in_(requested_ids),
+                Account.user_id == current_user.id,
+                Account.is_active.is_(True),
+            )
+        )
+        account_ids = [row[0] for row in result.all()]
+        if len(account_ids) != len(requested_ids):
+            raise HTTPException(status_code=403, detail="One or more accounts not found or not accessible")
 
     try:
         result = await execute_basket(

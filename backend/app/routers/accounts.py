@@ -11,6 +11,8 @@ logger = logging.getLogger(__name__)
 
 from app.database import get_db
 from app.models.account import Account, AccountToken
+from app.models.user import User
+from app.routers.users import get_current_user
 from app.schemas.account import (
     AccountCreate,
     AccountListResponse,
@@ -59,11 +61,14 @@ def _account_to_response(account: Account) -> AccountResponse:
 
 
 @router.get("", response_model=AccountListResponse)
-async def list_accounts(db: AsyncSession = Depends(get_db)):
+async def list_accounts(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     result = await db.execute(
         select(Account)
         .options(selectinload(Account.tokens))
-        .where(Account.is_active.is_(True))
+        .where(Account.is_active.is_(True), Account.user_id == current_user.id)
         .order_by(Account.name)
     )
     accounts = result.scalars().all()
@@ -71,9 +76,15 @@ async def list_accounts(db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/{account_id}", response_model=AccountResponse)
-async def get_account(account_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def get_account(
+    account_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     result = await db.execute(
-        select(Account).options(selectinload(Account.tokens)).where(Account.id == account_id)
+        select(Account)
+        .options(selectinload(Account.tokens))
+        .where(Account.id == account_id, Account.user_id == current_user.id)
     )
     account = result.scalar_one_or_none()
     if not account:
@@ -82,8 +93,13 @@ async def get_account(account_id: uuid.UUID, db: AsyncSession = Depends(get_db))
 
 
 @router.post("", response_model=AccountResponse, status_code=201)
-async def create_account(data: AccountCreate, db: AsyncSession = Depends(get_db)):
+async def create_account(
+    data: AccountCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     account = Account(
+        user_id=current_user.id,
         name=data.name,
         owner_name=data.owner_name,
         kite_api_key=data.kite_api_key,
@@ -102,9 +118,16 @@ async def create_account(data: AccountCreate, db: AsyncSession = Depends(get_db)
 
 
 @router.put("/{account_id}", response_model=AccountResponse)
-async def update_account(account_id: uuid.UUID, data: AccountUpdate, db: AsyncSession = Depends(get_db)):
+async def update_account(
+    account_id: uuid.UUID,
+    data: AccountUpdate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     result = await db.execute(
-        select(Account).options(selectinload(Account.tokens)).where(Account.id == account_id)
+        select(Account)
+        .options(selectinload(Account.tokens))
+        .where(Account.id == account_id, Account.user_id == current_user.id)
     )
     account = result.scalar_one_or_none()
     if not account:
@@ -139,8 +162,14 @@ async def update_account(account_id: uuid.UUID, data: AccountUpdate, db: AsyncSe
 
 
 @router.delete("/{account_id}", status_code=204)
-async def delete_account(account_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Account).where(Account.id == account_id))
+async def delete_account(
+    account_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Account).where(Account.id == account_id, Account.user_id == current_user.id)
+    )
     account = result.scalar_one_or_none()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")

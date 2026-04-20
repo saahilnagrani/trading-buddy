@@ -14,10 +14,12 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.database import get_db
 from app.models.account import Account, AccountToken
+from app.models.user import User
 from app.redis import get_redis
 from app.schemas.account import AuthStatusResponse, LoginUrlResponse
 from app.services.kite_service import get_kite_client, remove_kite_client
 from app.services.token_manager import encrypt_token, decrypt_token
+from app.routers.users import get_current_user
 
 router = APIRouter()
 
@@ -38,8 +40,18 @@ def _next_expiry() -> datetime:
 
 
 @router.get("/login-url/{account_id}", response_model=LoginUrlResponse)
-async def get_login_url(account_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Account).where(Account.id == account_id, Account.is_active.is_(True)))
+async def get_login_url(
+    account_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    result = await db.execute(
+        select(Account).where(
+            Account.id == account_id,
+            Account.is_active.is_(True),
+            Account.user_id == current_user.id,
+        )
+    )
     account = result.scalar_one_or_none()
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
@@ -149,13 +161,17 @@ async def oauth_callback(
 
 
 @router.post("/logout/{account_id}")
-async def logout_account(account_id: uuid.UUID, db: AsyncSession = Depends(get_db)):
+async def logout_account(
+    account_id: uuid.UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     """End the current Kite session for this account and invalidate the stored token."""
     now = datetime.now(timezone.utc)
     result = await db.execute(
         select(Account)
         .options(selectinload(Account.tokens))
-        .where(Account.id == account_id, Account.is_active.is_(True))
+        .where(Account.id == account_id, Account.is_active.is_(True), Account.user_id == current_user.id)
     )
     account = result.scalar_one_or_none()
     if not account:
@@ -195,12 +211,15 @@ async def logout_account(account_id: uuid.UUID, db: AsyncSession = Depends(get_d
 
 
 @router.get("/status", response_model=AuthStatusResponse)
-async def auth_status(db: AsyncSession = Depends(get_db)):
+async def auth_status(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     now = datetime.now(timezone.utc)
     result = await db.execute(
         select(Account)
         .options(selectinload(Account.tokens))
-        .where(Account.is_active.is_(True))
+        .where(Account.is_active.is_(True), Account.user_id == current_user.id)
         .order_by(Account.name)
     )
     accounts = result.scalars().all()
